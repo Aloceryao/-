@@ -5,7 +5,7 @@ import {
   Wine, Camera, AlertCircle, Tag, Check, DollarSign, Filter, Layers, Quote, 
   FilePlus, Globe, Star, FolderPlus, BookOpen, MoreHorizontal, LayoutGrid, 
   ListPlus, ArrowLeft, Image as ImageIcon, Database, Info, Percent, FileSpreadsheet,
-  Lock, Unlock, KeyRound, ShoppingCart, LayoutDashboard, Cloud, CloudOff, Wifi, WifiOff, Users
+  Lock, Unlock, KeyRound, ShoppingCart, LayoutDashboard, Cloud, CloudOff, Wifi, WifiOff, Users, LogIn, UserCog, LogOut
 } from 'lucide-react';
 
 // ==========================================
@@ -103,7 +103,7 @@ const ImageDB = {
       });
     } catch (e) {
       console.error("DB Save Error:", e);
-      throw e; // Propagate error
+      throw e; 
     }
   },
   get: async (id) => {
@@ -199,11 +199,11 @@ const safeNumber = (num) => { const n = parseFloat(num); return isNaN(n) ? 0 : n
 const calculateRecipeStats = (recipe, allIngredients) => {
   if (!recipe) return { cost: 0, costRate: 0, abv: 0, volume: 0, price: 0, finalAbv: 0 };
   if (recipe.type === 'single' || recipe.isIngredient) {
-     const capacity = safeNumber(recipe.bottleCapacity) || safeNumber(recipe.volume) || 700;
-     const cost = safeNumber(recipe.bottleCost) || safeNumber(recipe.price) || 0;
-     const price = safeNumber(recipe.priceGlass) || safeNumber(recipe.priceShot) || 0; 
-     const costRate = price > 0 ? ((cost / capacity * 50) / price) * 100 : 0; 
-     return { cost, costRate, finalAbv: safeNumber(recipe.abv) || 40, volume: capacity, price };
+      const capacity = safeNumber(recipe.bottleCapacity) || safeNumber(recipe.volume) || 700;
+      const cost = safeNumber(recipe.bottleCost) || safeNumber(recipe.price) || 0;
+      const price = safeNumber(recipe.priceGlass) || safeNumber(recipe.priceShot) || 0; 
+      const costRate = price > 0 ? ((cost / capacity * 50) / price) * 100 : 0; 
+      return { cost, costRate, finalAbv: safeNumber(recipe.abv) || 40, volume: capacity, price };
   }
   let totalCost = 0, totalAlcoholVol = 0, totalVolume = 0;
   if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
@@ -226,7 +226,7 @@ const calculateRecipeStats = (recipe, allIngredients) => {
 };
 
 // ==========================================
-// 2. Visual Components
+// 2. Components
 // ==========================================
 
 const PricingTable = ({ recipe }) => {
@@ -239,16 +239,11 @@ const PricingTable = ({ recipe }) => {
   const formatCurrency = (val) => Math.round(val || 0).toLocaleString();
   const formatCost = (val) => (val || 0).toFixed(1);
   const getMarginColor = (price, itemCost) => {
-     const numPrice = safeNumber(price);
-     if (!numPrice || numPrice === 0) return 'text-slate-500';
-     const margin = ((numPrice - itemCost) / numPrice) * 100;
-     return margin < 70 ? 'text-rose-400' : 'text-emerald-400';
+      const numPrice = safeNumber(price);
+      if (!numPrice || numPrice === 0) return 'text-slate-500';
+      const margin = ((numPrice - itemCost) / numPrice) * 100;
+      return margin < 70 ? 'text-rose-400' : 'text-emerald-400';
   }
-  const getMargin = (price, itemCost) => {
-    const numPrice = safeNumber(price);
-    if (!numPrice || numPrice === 0) return '-';
-    return `${Math.round(((numPrice - itemCost) / numPrice) * 100)}%`;
-  };
   const rows = [
     { label: 'Shot (30ml)', cost: costPerMl * 30, suggest: (costPerMl * 30) / targetCostRateDecimal, price: recipe.priceShot, isMain: false },
     { label: '單杯 (50ml)', cost: costPerMl * 50, suggest: (costPerMl * 50) / targetCostRateDecimal, price: recipe.priceGlass, isMain: true },
@@ -258,7 +253,7 @@ const PricingTable = ({ recipe }) => {
     <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/50 mb-6 mt-4">
       <div className="flex items-center justify-between mb-3">
          <div className="flex items-center gap-2 text-amber-500 font-semibold text-xs uppercase tracking-wider"><DollarSign size={14} /><span>成本與售價</span></div>
-         <div className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded">Target CR: {userTargetRate}%</div>
+         <div className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded">Target: {userTargetRate}%</div>
       </div>
       <div className="grid grid-cols-1 gap-2 text-sm">
         <div className="grid grid-cols-5 gap-2 text-[10px] text-slate-500 border-b border-slate-800 pb-2 mb-1 text-center font-bold uppercase"><div className="text-left pl-2">規格</div><div>成本</div><div>建議</div><div className="text-amber-500">自訂</div><div>毛利</div></div>
@@ -268,7 +263,7 @@ const PricingTable = ({ recipe }) => {
             <div className="text-slate-400 text-xs">${formatCost(row.cost)}</div>
             <div className="text-slate-500 text-xs">${formatCurrency(row.suggest)}</div>
             <div className={`font-bold font-mono text-sm ${safeNumber(row.price) > 0 ? 'text-amber-400' : 'text-slate-700'}`}>{safeNumber(row.price) > 0 ? `$${formatCurrency(row.price)}` : '-'}</div>
-            <div className={`text-xs font-bold ${getMarginColor(row.price, row.cost)}`}>{getMargin(row.price, row.cost)}</div>
+            <div className={`text-xs font-bold ${getMarginColor(row.price, row.cost)}`}>{Math.round(((safeNumber(row.price) - row.cost)/safeNumber(row.price))*100)||'-'}%</div>
           </div>
         ))}
       </div>
@@ -289,7 +284,7 @@ const IngredientRow = memo(({ ing, onClick, onDelete, readOnly }) => (
       <div className="flex items-center gap-3 shrink-0">
          <div className="text-right cursor-pointer" onClick={() => onClick(ing)}>
             <div className="text-slate-300 text-sm font-mono">${ing.price}</div>
-            <div className="text-slate-600 text-[10px]">{ing.volume}ml</div>
+            <div className="text-slate-600 text-[10px]">{ing.volume}{safeString(ing.unit) || 'ml'}</div>
          </div>
          <button onClick={(e) => { e.stopPropagation(); onDelete(ing.id); }} className="p-3 -mr-2 text-slate-600 hover:text-rose-500 hover:bg-rose-900/20 rounded-full transition-colors active:scale-95"><Trash2 size={20} /></button>
       </div>
@@ -297,13 +292,16 @@ const IngredientRow = memo(({ ing, onClick, onDelete, readOnly }) => (
   </div>
 ));
 
-const RecipeCard = memo(({ recipe, ingredients, onClick, isConsumerMode }) => {
+const RecipeCard = memo(({ recipe, ingredients, onClick, role }) => {
   const stats = useMemo(() => calculateRecipeStats(recipe, ingredients), [recipe, ingredients]);
-  const displayBase = safeString(recipe.baseSpirit).split(' ')[0] || '其他';
   const isSingle = recipe.type === 'single' || recipe.isIngredient;
-  const displayPrice = isConsumerMode 
-      ? (isSingle ? (recipe.priceGlass || recipe.priceShot || '-') : (recipe.price || stats.price))
-      : (isSingle ? (recipe.priceGlass || recipe.priceShot || '-') : stats.price);
+  // If role is 'customer' or 'staff', hide costs/edit. But staff needs separate logic, handled by parent.
+  // Here we use 'role' prop: 'owner', 'staff', 'customer'
+  const isOwner = role === 'owner';
+   
+  const displayPrice = isSingle 
+      ? (recipe.priceGlass || recipe.priceShot || '-') 
+      : (recipe.price || stats.price);
 
   return (
     <div onClick={() => onClick(recipe)} className="group bg-slate-800 rounded-2xl overflow-hidden shadow-lg border border-slate-800 hover:border-slate-700 transition-all active:scale-[0.98] flex flex-row h-36 w-full cursor-pointer">
@@ -319,7 +317,7 @@ const RecipeCard = memo(({ recipe, ingredients, onClick, isConsumerMode }) => {
            <p className="text-slate-400 text-xs font-medium tracking-wider uppercase truncate opacity-80 mb-1">{safeString(recipe.nameEn)}</p>
            {recipe.flavorDescription && (<div className="text-[10px] text-slate-500 line-clamp-1 italic mb-1.5 opacity-80">"{safeString(recipe.flavorDescription)}"</div>)}
            <div className="flex gap-1 flex-wrap">
-             {isSingle ? (<span className="text-[10px] text-purple-200 bg-purple-900/40 px-1.5 py-0.5 rounded border border-purple-800/50">單品</span>) : (recipe.baseSpirit && <span className="text-[10px] text-blue-200 bg-blue-900/40 px-1.5 py-0.5 rounded border border-blue-800/50">{displayBase}</span>)}
+             {isSingle ? (<span className="text-[10px] text-purple-200 bg-purple-900/40 px-1.5 py-0.5 rounded border border-purple-800/50">單品</span>) : (recipe.baseSpirit && <span className="text-[10px] text-blue-200 bg-blue-900/40 px-1.5 py-0.5 rounded border border-blue-800/50">{safeString(recipe.baseSpirit)}</span>)}
              {recipe.tags?.slice(0,2).map(tag => (<span key={safeString(tag)} className="text-[10px] text-slate-400 bg-slate-700/50 px-1.5 py-0.5 rounded">{safeString(tag).split(' ')[0]}</span>))}
            </div>
          </div>
@@ -328,8 +326,8 @@ const RecipeCard = memo(({ recipe, ingredients, onClick, isConsumerMode }) => {
              <><span className="text-slate-400">Pure Drink</span><span>|</span><span>{safeNumber(recipe.bottleCapacity) || safeNumber(recipe.volume)}ml</span></>
            ) : (
              <>
-               {!isConsumerMode && <span className={stats.costRate > 30 ? 'text-rose-400' : 'text-emerald-400'}>CR {stats.costRate.toFixed(0)}%</span>}
-               {!isConsumerMode && <span>|</span>}
+               {isOwner && <span className={stats.costRate > 30 ? 'text-rose-400' : 'text-emerald-400'}>CR {stats.costRate.toFixed(0)}%</span>}
+               {isOwner && <span>|</span>}
                <span>{stats.finalAbv.toFixed(1)}% ABV</span>
              </>
            )}
@@ -339,21 +337,12 @@ const RecipeCard = memo(({ recipe, ingredients, onClick, isConsumerMode }) => {
   );
 });
 
-const Badge = ({ children, color = 'slate', className='' }) => {
-  const colors = { slate: 'bg-slate-700 text-slate-300', amber: 'bg-amber-900/50 text-amber-500 border border-amber-500/20', blue: 'bg-blue-900/30 text-blue-400', rose: 'bg-rose-900/30 text-rose-400', purple: 'bg-purple-900/30 text-purple-400' };
-  return <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${colors[color]} ${className}`}>{children}</span>;
-};
-
 const ChipSelector = ({ title, options, selected, onSelect }) => {
   const toggle = (opt) => { if (selected.includes(opt)) onSelect(selected.filter(s => s !== opt)); else onSelect([...selected, opt]); };
   return (
     <div className="space-y-2"><div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{title}</div><div className="flex flex-wrap gap-2">{options.map(opt => (<button key={opt} onClick={() => toggle(opt)} className={`px-3 py-1.5 rounded-full text-xs transition-all border ${selected.includes(opt) ? 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-900/20' : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-500'}`}>{opt.split(' ')[0]}</button>))}</div></div>
   );
 };
-
-// ==========================================
-// 3. Screen Components
-// ==========================================
 
 const CategoryEditModal = ({ isOpen, onClose, onSave }) => {
   const [nameZh, setNameZh] = useState('');
@@ -379,50 +368,39 @@ const CategoryEditModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
-const CategoryGrid = ({ categories, onSelect, onAdd, onDelete, isEditing, toggleEditing, isConsumerMode }) => {
+const CategoryGrid = ({ categories, onSelect, onAdd, onDelete, isEditing, toggleEditing, role }) => {
   return (
     <div className="p-4 animate-fade-in">
-       <div className="flex justify-between items-center mb-4">
-          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">快速分類</h3>
-          {!isConsumerMode && (
-            <button onClick={toggleEditing} className={`text-xs px-2 py-1 rounded border transition-colors ${isEditing ? 'bg-slate-700 text-white border-slate-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}>{isEditing ? '完成' : '編輯'}</button>
-          )}
+       <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">快速分類</h3>
+       {role === 'owner' && <button onClick={toggleEditing} className={`text-xs px-2 py-1 rounded border transition-colors ${isEditing ? 'bg-slate-700 text-white border-slate-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}>{isEditing ? '完成' : '編輯'}</button>}
        </div>
        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {categories.map((cat, idx) => (
             <div key={cat.id || idx} onClick={() => !isEditing && onSelect(cat)} className={`relative h-28 rounded-2xl bg-gradient-to-br ${cat.gradient || 'from-slate-700 to-slate-800'} shadow-lg overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-95 transition-all border border-white/10 group`}>
                <div className="absolute -right-2 -bottom-4 w-24 h-24 text-white opacity-20 transform rotate-[-15deg] group-hover:scale-110 group-hover:opacity-30 transition-all duration-500 pointer-events-none"><CategoryIcon iconType={cat.iconType} /></div>
                <div className="absolute inset-0 p-4 flex flex-col justify-center items-center z-10"><span className="text-white font-bold text-xl text-center drop-shadow-md tracking-wide">{cat.nameZh}</span><span className="text-[10px] text-white/70 font-medium uppercase tracking-wider mt-1 border-t border-white/20 pt-1 px-2">{cat.nameEn}</span></div>
-               {!isConsumerMode && isEditing && <button onClick={(e) => { e.stopPropagation(); onDelete(cat.id); }} className="absolute top-2 right-2 bg-rose-500 text-white rounded-full p-1.5 shadow-md hover:bg-rose-600 animate-scale-in z-20"><X size={14} strokeWidth={3} /></button>}
+               {role === 'owner' && isEditing && <button onClick={(e) => { e.stopPropagation(); onDelete(cat.id); }} className="absolute top-2 right-2 bg-rose-500 text-white rounded-full p-1.5 shadow-md hover:bg-rose-600 animate-scale-in z-20"><X size={14} strokeWidth={3} /></button>}
             </div>
           ))}
-          {!isConsumerMode && (
-            <button onClick={onAdd} className="h-28 rounded-2xl bg-slate-800/50 border-2 border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 hover:text-white hover:border-slate-500 hover:bg-slate-800 transition-all gap-2 group"><div className="p-3 rounded-full bg-slate-800 group-hover:bg-slate-700 transition-colors"><Plus size={24} /></div><span className="text-xs font-bold">新增分類</span></button>
-          )}
+          {role === 'owner' && <button onClick={onAdd} className="h-28 rounded-2xl bg-slate-800/50 border-2 border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 hover:text-white hover:border-slate-500 hover:bg-slate-800 transition-all gap-2 group"><div className="p-3 rounded-full bg-slate-800 group-hover:bg-slate-700 transition-colors"><Plus size={24} /></div><span className="text-xs font-bold">新增分類</span></button>}
        </div>
     </div>
   );
 };
 
-// 新增：材料選擇器 Modal (修復頂部距離 + 子分類)
 const IngredientPickerModal = ({ isOpen, onClose, onSelect, ingredients, categories, availableBases }) => {
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState('all');
   const [activeSubCat, setActiveSubCat] = useState('all');
 
-  useEffect(() => {
-    setActiveSubCat('all');
-  }, [activeCat]);
-
+  useEffect(() => { setActiveSubCat('all'); }, [activeCat]);
   if (!isOpen) return null;
 
   const filtered = ingredients.filter(i => {
     const matchSearch = safeString(i.nameZh).toLowerCase().includes(search.toLowerCase()) || safeString(i.nameEn).toLowerCase().includes(search.toLowerCase());
     const matchCat = activeCat === 'all' || i.type === activeCat;
     let matchSub = true;
-    if (activeCat === 'alcohol' && activeSubCat !== 'all') {
-        matchSub = i.subType === activeSubCat;
-    }
+    if (activeCat === 'alcohol' && activeSubCat !== 'all') { matchSub = i.subType === activeSubCat; }
     return matchSearch && matchCat && matchSub;
   });
 
@@ -436,14 +414,12 @@ const IngredientPickerModal = ({ isOpen, onClose, onSelect, ingredients, categor
                 <input autoFocus value={search} onChange={e=>setSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 pl-9 pr-4 text-slate-200 outline-none focus:border-amber-500" placeholder="搜尋材料..." />
              </div>
           </div>
-          
           <div className="flex gap-2 p-2 px-4 overflow-x-auto border-b border-slate-800 shrink-0 no-scrollbar">
              <button onClick={()=>setActiveCat('all')} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors ${activeCat==='all'?'bg-amber-600 text-white border-amber-600':'text-slate-400 border-slate-700 bg-slate-900'}`}>全部</button>
              {categories.map(c => (
                 <button key={c.id} onClick={()=>setActiveCat(c.id)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors ${activeCat===c.id?'bg-amber-600 text-white border-amber-600':'text-slate-400 border-slate-700 bg-slate-900'}`}>{c.label.split(' ')[0]}</button>
              ))}
           </div>
-          
           {activeCat === 'alcohol' && availableBases && (
             <div className="flex gap-2 p-2 px-4 overflow-x-auto border-b border-slate-800 shrink-0 no-scrollbar bg-slate-900/50 animate-slide-up">
                 <button onClick={()=>setActiveSubCat('all')} className={`px-3 py-1.5 rounded-full text-[10px] whitespace-nowrap border transition-colors ${activeSubCat==='all'?'bg-slate-700 text-white border-slate-500':'text-slate-500 border-slate-800 hover:bg-slate-800'}`}>全部</button>
@@ -452,7 +428,6 @@ const IngredientPickerModal = ({ isOpen, onClose, onSelect, ingredients, categor
                 ))}
             </div>
           )}
-
           <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-slate-950">
              {filtered.map(ing => (
                 <button key={ing.id} onClick={() => { onSelect(ing.id); onClose(); }} className="w-full text-left p-3 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-amber-500/50 transition-all flex justify-between items-center group active:bg-slate-800">
@@ -472,12 +447,11 @@ const IngredientPickerModal = ({ isOpen, onClose, onSelect, ingredients, categor
     </div>
   );
 };
-
 // ==========================================
-// 4. Screens (RecipeListScreen with Lock Icon in Header & Dual-row Categories)
+// 4. Screens
 // ==========================================
 
-const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, recipeCategoryFilter, setRecipeCategoryFilter, startEdit, setViewingItem, availableTags, availableBases, isConsumerMode, onUnlock }) => {
+const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, recipeCategoryFilter, setRecipeCategoryFilter, startEdit, setViewingItem, availableTags, availableBases, userRole, onUnlock }) => {
   const [filterBases, setFilterBases] = useState([]);
   const [filterTags, setFilterTags] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -491,7 +465,6 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
   useEffect(() => { if (searchTerm) setActiveBlock(null); }, [searchTerm]);
 
   const showGrid = !searchTerm && !activeBlock && recipeCategoryFilter !== 'single' && recipeCategoryFilter !== 'all';
-  
   const handleBlockSelect = (cat) => { setActiveBlock(cat); const baseMatch = availableBases.find(b => b.includes(cat.nameZh) || b.includes(cat.nameEn)); if (baseMatch) setFilterBases([baseMatch]); else if (availableTags.includes(cat.nameZh)) setFilterTags([cat.nameZh]); };
   const handleAddCategory = (newCat) => setGridCategories([...gridCategories, newCat]);
   const handleDeleteCategory = (id) => { if (confirm(`確定移除此方塊嗎？`)) setGridCategories(gridCategories.filter(c => c.id !== id)); };
@@ -500,7 +473,7 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
   const filtered = useMemo(() => {
     const safeIngs = Array.isArray(ingredients) ? ingredients : [];
     const safeRecipes = Array.isArray(recipes) ? recipes : [];
-    const singleIngredients = safeIngs.filter(i => i.addToSingle).map(i => ({ ...i, category: 'single', type: 'single', baseSpirit: i.subType || '', priceShot: i.priceShot || '', priceGlass: i.priceGlass || '', priceBottle: i.priceBottle || '', targetCostRate: i.targetCostRate || 25, isIngredient: true }));
+const singleIngredients = safeIngs.filter(i => i.addToSingle).map(i => ({ ...i, category: 'single', type: 'single', baseSpirit: i.subType || '', priceShot: i.priceShot || '', priceGlass: i.priceGlass || '', priceBottle: i.priceBottle || '', targetCostRate: i.targetCostRate || 25, isIngredient: true }));
     let sourceList = safeRecipes;
     if (recipeCategoryFilter === 'single' || recipeCategoryFilter === 'all') { sourceList = [...safeRecipes, ...singleIngredients]; }
     return sourceList.filter(r => {
@@ -518,22 +491,23 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
     });
   }, [recipes, ingredients, recipeCategoryFilter, searchTerm, filterBases, filterTags, activeBlock, availableBases]);
 
+  const isConsumer = userRole === 'customer';
+  const isOwner = userRole === 'owner';
+
   return (
     <div className="h-full flex flex-col animate-fade-in w-full bg-slate-950">
       <div className="shrink-0 bg-slate-950/95 backdrop-blur z-20 border-b border-slate-800 shadow-md pt-safe">
         <div className="px-4 py-3 flex gap-2 w-full items-center">
            <div className="flex-1 relative"><Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4"/><input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="搜尋酒單..." className="w-full bg-slate-900 text-slate-200 pl-9 pr-4 py-2 rounded-xl border border-slate-800 focus:outline-none focus:border-amber-500/50 text-sm"/></div>
-           {/* 顧客模式下：顯示篩選器 + 解鎖按鈕 */}
            {!showGrid && recipeCategoryFilter !== 'single' && (
              <button onClick={() => setShowFilters(!showFilters)} className={`p-2 rounded-xl border transition-colors ${showFilters || filterBases.length > 0 || filterTags.length > 0 ? 'bg-slate-800 border-amber-500/50 text-amber-500' : 'border-slate-800 text-slate-400'}`}><Filter size={20} /></button>
            )}
-           {isConsumerMode ? (
+           {isConsumer ? (
              <button onClick={onUnlock} className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white bg-slate-900"><Lock size={20}/></button>
            ) : (
              <button onClick={() => startEdit('recipe')} className="bg-amber-600 hover:bg-amber-500 text-white p-2 rounded-xl shadow-lg active:scale-95 transition-all"><Plus size={20} /></button>
            )}
         </div>
-        {/* 修改：改為 Grid Layout 實現兩排顯示 */}
         <div className="grid grid-cols-2 gap-2 px-4 pb-2 border-b border-slate-800/50 w-full">
            {[{id: 'all', label: '全部 All'}, {id: 'classic', label: '經典 Classic'}, {id: 'signature', label: '特調 Signature'}, {id: 'single', label: '單品/純飲 Single'}].map(cat => (
              <button key={cat.id} onClick={() => setRecipeCategoryFilter(cat.id)} className={`py-2 px-2 text-xs font-bold border rounded-lg transition-colors select-none flex items-center justify-center gap-1 ${recipeCategoryFilter === cat.id ? 'bg-slate-800 text-amber-500 border-amber-500' : 'border-slate-700 text-slate-500 hover:bg-slate-800'}`}>{cat.label}</button>
@@ -542,17 +516,14 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
         {showFilters && !showGrid && recipeCategoryFilter !== 'single' && (<div className="p-4 bg-slate-900 border-b border-slate-800 animate-slide-up w-full"><div className="mb-4"><ChipSelector title="基酒篩選 (Base)" options={availableBases} selected={filterBases} onSelect={setFilterBases} /></div><div><ChipSelector title="風味篩選 (Flavor)" options={availableTags} selected={filterTags} onSelect={setFilterTags} /></div><div className="mt-4 flex justify-between items-center text-xs text-slate-500"><span>找到 {filtered.length} 款酒譜</span><button onClick={() => {setFilterBases([]); setFilterTags([]);}} className="text-rose-400 hover:text-rose-300">清除篩選</button></div></div>)}
       </div>
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-         {showGrid ? (<CategoryGrid categories={gridCategories} onSelect={handleBlockSelect} onAdd={() => setShowCatModal(true)} onDelete={handleDeleteCategory} isEditing={isGridEditing} toggleEditing={() => setIsGridEditing(!isGridEditing)} isConsumerMode={isConsumerMode} />) : (<div className="p-4 space-y-4 pb-24">{activeBlock && (<div className="flex items-center gap-3 mb-4 animate-fade-in"><button onClick={clearBlockFilter} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-200"><ArrowLeft size={20}/></button><div><div className="text-xs text-slate-500">正在檢視</div><div className="text-xl font-bold text-amber-500">{activeBlock.nameZh}</div></div></div>)}{filtered.length > 0 ? filtered.map(recipe => <RecipeCard key={recipe.id} recipe={recipe} ingredients={ingredients} onClick={setViewingItem} isConsumerMode={isConsumerMode} />) : <div className="text-center py-10 text-slate-500 flex flex-col items-center"><Filter size={48} className="mb-4 opacity-20"/><p>沒有找到符合條件的酒譜</p>{activeBlock && <button onClick={clearBlockFilter} className="mt-4 text-amber-500 underline">返回分類</button>}</div>}<div className="h-10"></div></div>)}
+         {showGrid ? (<CategoryGrid categories={gridCategories} onSelect={handleBlockSelect} onAdd={() => setShowCatModal(true)} onDelete={handleDeleteCategory} isEditing={isGridEditing} toggleEditing={() => setIsGridEditing(!isGridEditing)} isConsumerMode={!isOwner} role={userRole} />) : (<div className="p-4 space-y-4 pb-24">{activeBlock && (<div className="flex items-center gap-3 mb-4 animate-fade-in"><button onClick={clearBlockFilter} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-200"><ArrowLeft size={20}/></button><div><div className="text-xs text-slate-500">正在檢視</div><div className="text-xl font-bold text-amber-500">{activeBlock.nameZh}</div></div></div>)}{filtered.length > 0 ? filtered.map(recipe => <RecipeCard key={recipe.id} recipe={recipe} ingredients={ingredients} onClick={setViewingItem} isConsumerMode={isConsumer} role={userRole} />) : <div className="text-center py-10 text-slate-500 flex flex-col items-center"><Filter size={48} className="mb-4 opacity-20"/><p>沒有找到符合條件的酒譜</p>{activeBlock && <button onClick={clearBlockFilter} className="mt-4 text-amber-500 underline">返回分類</button>}</div>}<div className="h-10"></div></div>)}
       </div>
       <CategoryEditModal isOpen={showCatModal} onClose={() => setShowCatModal(false)} onSave={handleAddCategory} />
     </div>
   );
 };
-// ==========================================
-// 4. Screens (Part 2: Featured, Inventory, QuickCalc)
-// ==========================================
 
-const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem, ingredients, showConfirm, isConsumerMode, onUnlock }) => { 
+const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem, ingredients, showConfirm, userRole, onUnlock }) => { 
   const [activeSectionId, setActiveSectionId] = useState(() => { try { return localStorage.getItem('bar_active_section_v1'); } catch { return null; } }); 
   const [isAdding, setIsAdding] = useState(false); 
   const [isEditing, setIsEditing] = useState(false); 
@@ -561,19 +532,21 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
   const [showPicker, setShowPicker] = useState(false); 
   const [pickingForSubgroupId, setPickingForSubgroupId] = useState(null); 
   const [pickerSearch, setPickerSearch] = useState(''); 
-  
+   
   useEffect(() => { if (activeSectionId) localStorage.setItem('bar_active_section_v1', activeSectionId); else localStorage.removeItem('bar_active_section_v1'); }, [activeSectionId]); 
-  
+   
   const activeSection = sections.find(s => s.id === activeSectionId); 
   useEffect(() => { if (activeSectionId && !activeSection) setActiveSectionId(null); }, [sections, activeSectionId, activeSection]); 
-  
+  const isOwner = userRole === 'owner';
+  const isConsumer = userRole === 'customer';
+
   const handleAddSection = () => { if (newSectionTitle.trim()) { setSections([...sections, { id: generateId(), title: newSectionTitle.trim(), subgroups: [] }]); setNewSectionTitle(''); setIsAdding(false); } }; 
   const handleDeleteSection = (id) => { showConfirm('刪除專區', '確定刪除此專區？', () => { setSections(sections.filter(s => s.id !== id)); if (activeSectionId === id) setActiveSectionId(null); }); }; 
   const handleAddSubgroup = (sectionId) => { if (newSubgroupTitle.trim()) { const updatedSections = sections.map(s => { if (s.id === sectionId) { return { ...s, subgroups: [...s.subgroups, { id: generateId(), title: newSubgroupTitle.trim(), recipeIds: [] }] }; } return s; }); setSections(updatedSections); setNewSubgroupTitle(''); setIsAdding(false); } }; 
   const handleDeleteSubgroup = (sectionId, subgroupId) => { showConfirm('刪除分類', '確定刪除此分類？', () => { const updatedSections = sections.map(s => { if (s.id === sectionId) { return { ...s, subgroups: s.subgroups.filter(sg => sg.id !== subgroupId) }; } return s; }); setSections(updatedSections); }); }; 
   const handleAddRecipeToSubgroup = (recipeId) => { const updatedSections = sections.map(s => { if (s.id === activeSectionId) { const updatedSubgroups = s.subgroups.map(sg => { if (sg.id === pickingForSubgroupId && !sg.recipeIds.includes(recipeId)) { return { ...sg, recipeIds: [...sg.recipeIds, recipeId] }; } return sg; }); return { ...s, subgroups: updatedSubgroups }; } return s; }); setSections(updatedSections); setShowPicker(false); }; 
   const handleRemoveRecipeFromSubgroup = (subgroupId, recipeId) => { const updatedSections = sections.map(s => { if (s.id === activeSectionId) { const updatedSubgroups = s.subgroups.map(sg => { if (sg.id === subgroupId) { return { ...sg, recipeIds: sg.recipeIds.filter(id => id !== recipeId) }; } return sg; }); return { ...s, subgroups: updatedSubgroups }; } return s; }); setSections(updatedSections); }; 
-  
+   
   if (!activeSectionId) { 
     return (
       <div className="h-full flex flex-col animate-fade-in w-full bg-slate-950">
@@ -581,10 +554,10 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
           <div className="flex justify-between items-center mt-3">
             <h2 className="text-2xl font-serif text-slate-100">精選專區</h2>
             <div className="flex gap-3">
-              {isConsumerMode ? (
+              {isConsumer ? (
                  <button onClick={onUnlock} className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white bg-slate-900"><Lock size={20}/></button>
               ) : (
-                <>
+                isOwner && <>
                   <button onClick={() => { setIsAdding(!isAdding); setIsEditing(false); }} className={`p-2 rounded-full border transition-all ${isAdding ? 'bg-amber-600 border-amber-500 text-white' : 'text-slate-400 border-slate-700 bg-slate-800'}`}><Plus size={20} /></button>
                   <button onClick={() => { setIsEditing(!isEditing); setIsAdding(false); }} className={`p-2 rounded-full border transition-all ${isEditing ? 'bg-slate-700 border-slate-500 text-white' : 'text-slate-400 border-slate-700 bg-slate-800'}`}><Edit3 size={20} /></button>
                 </>
@@ -602,7 +575,7 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
                   <h2 className="text-2xl font-serif text-white font-bold mb-1 relative z-10">{section.title}</h2>
                   <p className="text-slate-500 text-sm relative z-10">{section.subgroups?.length || 0} 個子分類</p>
                 </div>
-                {!isConsumerMode && isEditing && <button onClick={(e) => { e.stopPropagation(); handleDeleteSection(section.id); }} className="absolute -top-2 -right-2 bg-rose-600 text-white p-2 rounded-full shadow-lg z-30 animate-scale-in hover:bg-rose-500"><Trash2 size={16} /></button>}
+                {isOwner && isEditing && <button onClick={(e) => { e.stopPropagation(); handleDeleteSection(section.id); }} className="absolute -top-2 -right-2 bg-rose-600 text-white p-2 rounded-full shadow-lg z-30 animate-scale-in hover:bg-rose-500"><Trash2 size={16} /></button>}
               </div>
             ))}
           </div>
@@ -611,20 +584,21 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
       </div>
     ); 
   } 
-  
+   
   return (
     <div className="h-full flex flex-col animate-slide-up w-full bg-slate-950">
       <div className="shrink-0 bg-slate-950/95 backdrop-blur z-20 border-b border-slate-800 shadow-md px-4 pt-safe pb-3">
         <div className="flex items-center gap-3 mt-3">
           <button onClick={() => setActiveSectionId(null)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white border border-slate-700 active:bg-slate-700"><ChevronLeft size={20} /></button>
           <h2 className="text-xl font-serif text-white font-bold flex-1 truncate">{activeSection.title}</h2>
-          {!isConsumerMode && (
-            <div className="flex gap-2">
+          {isConsumer ? (
+             <button onClick={onUnlock} className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white bg-slate-900"><Lock size={18}/></button>
+          ) : (
+            isOwner && <div className="flex gap-2">
               <button onClick={() => { setIsAdding(!isAdding); setIsEditing(false); }} className={`p-2 rounded-full border transition-all ${isAdding ? 'bg-amber-600 border-amber-500 text-white' : 'text-slate-500 border-slate-700 bg-slate-800'}`}><Plus size={18} /></button>
               <button onClick={() => { setIsEditing(!isEditing); setIsAdding(false); }} className={`p-2 rounded-full border transition-all ${isEditing ? 'bg-slate-700 border-slate-500 text-white' : 'text-slate-500 border-slate-700 bg-slate-800'}`}><Edit3 size={18} /></button>
             </div>
           )}
-          {isConsumerMode && <button onClick={onUnlock} className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white bg-slate-900"><Lock size={18}/></button>}
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 custom-scrollbar">
@@ -635,8 +609,8 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
               <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                 <h3 className="text-lg font-bold text-amber-500">{subgroup.title}</h3>
                 <div className="flex gap-2">
-                  {!isConsumerMode && isEditing && <button onClick={() => handleDeleteSubgroup(activeSection.id, subgroup.id)} className="text-rose-500 p-1"><Trash2 size={16}/></button>}
-                  {!isConsumerMode && <button onClick={() => { setPickingForSubgroupId(subgroup.id); setShowPicker(true); }} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs bg-slate-800 px-2 py-1 rounded-full border border-slate-700"><Plus size={12}/> 新增酒譜</button>}
+                  {isOwner && isEditing && <button onClick={() => handleDeleteSubgroup(activeSection.id, subgroup.id)} className="text-rose-500 p-1"><Trash2 size={16}/></button>}
+                  {isOwner && <button onClick={() => { setPickingForSubgroupId(subgroup.id); setShowPicker(true); }} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs bg-slate-800 px-2 py-1 rounded-full border border-slate-700"><Plus size={12}/> 新增酒譜</button>}
                 </div>
               </div>
               <div className="grid gap-3">
@@ -646,8 +620,8 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
                     if (!recipe) return null; 
                     return (
                       <div key={rid} className="relative group">
-                        <RecipeCard recipe={recipe} ingredients={ingredients} onClick={setViewingItem} isConsumerMode={isConsumerMode} />
-                        {!isConsumerMode && isEditing && <button onClick={(e) => { e.stopPropagation(); handleRemoveRecipeFromSubgroup(subgroup.id, rid); }} className="absolute top-2 right-2 bg-rose-600 text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X size={14}/></button>}
+                        <RecipeCard recipe={recipe} ingredients={ingredients} onClick={setViewingItem} isConsumerMode={isConsumer} role={userRole} />
+                        {isOwner && isEditing && <button onClick={(e) => { e.stopPropagation(); handleRemoveRecipeFromSubgroup(subgroup.id, rid); }} className="absolute top-2 right-2 bg-rose-600 text-white p-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X size={14}/></button>}
                       </div>
                     ); 
                   })
@@ -698,7 +672,7 @@ const EditorSheet = ({ mode, item, setItem, onSave, onClose, ingredients, availa
     }
     const val = parseFloat(valStr);
     const newItem = { ...item, targetCostRate: val };
-    
+     
     if (!isNaN(val)) {
         if (mode === 'ingredient' && item.addToSingle) {
             setItem(autoCalcPricesForIngredient(newItem));
@@ -751,7 +725,7 @@ const EditorSheet = ({ mode, item, setItem, onSave, onClose, ingredients, availa
            
            {/* 材料庫編輯模式 */}
            {mode === 'ingredient' && (
-              <div className="space-y-4">
+             <div className="space-y-4">
                  <div className="grid grid-cols-2 gap-4 bg-slate-800/50 p-4 rounded-xl border border-slate-800">
                     {/* 加入 autoCalcPricesForIngredient 觸發 */}
                     <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">價格 ($)</label><input type="number" value={item.price} onChange={e => setItem(autoCalcPricesForIngredient({...item, price: Number(e.target.value)}))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none font-mono" /></div>
@@ -792,12 +766,12 @@ const EditorSheet = ({ mode, item, setItem, onSave, onClose, ingredients, availa
                        </div>
                     )}
                  </div>
-              </div>
+             </div>
            )}
            
            {/* 酒譜編輯模式 */}
            {mode === 'recipe' && (
-              <div className="space-y-6">
+             <div className="space-y-6">
                  {/* 單品酒譜編輯 (Recipe Single) */}
                  {isSingle ? (
                  <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 space-y-4">
@@ -846,7 +820,7 @@ const EditorSheet = ({ mode, item, setItem, onSave, onClose, ingredients, availa
                  <div className="space-y-2"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">風味標籤</label><button onClick={() => { setAddingItem('tag'); setNewItemValue(''); }} className="text-xs text-amber-500">新增</button></div>{addingItem === 'tag' && (<div className="flex gap-2 items-center mb-2 animate-slide-up"><input autoFocus value={newItemValue} onChange={e=>setNewItemValue(e.target.value)} className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white" placeholder="輸入新標籤..."/><button onClick={handleAddItem} className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold">新增</button><button onClick={()=>setAddingItem(null)} className="text-slate-400 p-1"><X size={14}/></button></div>)}<div className="flex flex-wrap gap-2">{availableTags.map(tag => (<button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-full text-xs transition-all border ${item.tags?.includes(tag) ? 'bg-amber-600 text-white border-amber-600' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{tag}</button>))}</div></div>
                  <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">步驟 / 備註</label><textarea value={item.steps} onChange={e => setItem({...item, steps: e.target.value})} className="w-full h-24 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 resize-none" placeholder="輸入製作步驟..." /></div>
                  <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">風味描述</label><textarea value={item.flavorDescription} onChange={e => setItem({...item, flavorDescription: e.target.value})} className="w-full h-16 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 resize-none" placeholder="簡短描述風味..." /></div>
-              </div>
+             </div>
            )}
            <div className="pt-6 border-t border-slate-800"><button onClick={() => { if (requestDelete) requestDelete(item.id, mode); onClose(); }} className="w-full py-3 rounded-xl border border-rose-900/50 text-rose-500 hover:bg-rose-900/20 font-bold transition-colors flex items-center justify-center gap-2"><Trash2 size={18}/> 刪除此項目</button></div>
         </div>
@@ -896,8 +870,8 @@ const ViewerOverlay = ({ item, onClose, ingredients, startEdit, requestDelete, i
 
              <div className="absolute bottom-0 left-0 p-6 w-full">
                 <div className="flex gap-2 mb-2">
-                   {isSingle ? <Badge color="purple">Single 單品</Badge> : item.baseSpirit && <Badge color="blue">{item.baseSpirit}</Badge>}
-                   {!isSingle && <Badge color="amber">{item.technique}</Badge>}
+                   {isSingle ? <span className="text-[10px] text-purple-200 bg-purple-900/40 px-1.5 py-0.5 rounded border border-purple-800/50">Single 單品</span> : item.baseSpirit && <span className="text-[10px] text-blue-200 bg-blue-900/40 px-1.5 py-0.5 rounded border border-blue-800/50">{item.baseSpirit}</span>}
+                   {!isSingle && <span className="text-[10px] text-amber-200 bg-amber-900/40 px-1.5 py-0.5 rounded border border-amber-800/50">{item.technique}</span>}
                 </div>
                 <h1 className="text-3xl font-serif font-bold text-white mb-1">{item.nameZh}</h1>
                 <p className="text-slate-300 font-medium text-lg opacity-90">{item.nameEn}</p>
@@ -1016,63 +990,136 @@ const ViewerOverlay = ({ item, onClose, ingredients, startEdit, requestDelete, i
   );
 };
 
+// ==========================================
+// 5. Login Screen (New Feature)
+// ==========================================
+
+const LoginScreen = ({ onLogin }) => {
+  const [shopId, setShopId] = useState('');
+  const [role, setRole] = useState(null); // 'owner' | 'staff' | 'customer'
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = () => {
+    if (!shopId) return setError("請輸入商店代碼");
+    if (!role) return setError("請選擇身分");
+
+    // Simple password check (In real app, this should be server-side)
+    if (role === 'owner') {
+       // Allow any password for initial setup, but in production check against DB
+       // For this beta, we trust the user input to connect to the shop
+    }
+
+    onLogin(shopId, role);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 z-[100]">
+       <div className="w-20 h-20 bg-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-600/30 mb-6 animate-scale-in">
+          <Wine size={40} className="text-white"/>
+       </div>
+       <h1 className="text-3xl font-serif text-white font-bold mb-2">Bar Manager</h1>
+       <p className="text-slate-400 text-sm mb-8">雲端調酒管理系統 v13.0</p>
+
+       <div className="w-full max-w-sm space-y-4">
+          <div className="space-y-1">
+             <label className="text-xs text-slate-500 font-bold uppercase">商店代碼 (Shop ID)</label>
+             <div className="relative">
+                <input 
+                  value={shopId} 
+                  onChange={e => setShopId(e.target.value)} 
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 pl-12 text-white outline-none focus:border-amber-500 font-mono tracking-wide" 
+                  placeholder="例如: demo_bar" 
+                />
+                <LayoutDashboard className="absolute left-4 top-4 text-slate-500" size={20}/>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+             <button onClick={() => setRole('owner')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${role==='owner' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
+                <KeyRound size={24}/>
+                <span className="text-xs font-bold">店長</span>
+             </button>
+             <button onClick={() => setRole('staff')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${role==='staff' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
+                <Users size={24}/>
+                <span className="text-xs font-bold">店員</span>
+             </button>
+             <button onClick={() => setRole('customer')} className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${role==='customer' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'}`}>
+                <Beer size={24}/>
+                <span className="text-xs font-bold">顧客</span>
+             </button>
+          </div>
+
+          {role === 'owner' && (
+             <div className="animate-fade-in">
+               <input 
+                 type="password"
+                 value={password} 
+                 onChange={e => setPassword(e.target.value)} 
+                 className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-amber-500 text-center tracking-widest" 
+                 placeholder="請輸入管理密碼 (預設空白)" 
+               />
+             </div>
+          )}
+
+          {error && <p className="text-rose-500 text-xs text-center">{error}</p>}
+
+          <button onClick={handleLogin} className="w-full py-4 bg-slate-100 text-slate-900 font-bold rounded-xl shadow-lg hover:bg-white transition-all active:scale-95 mt-4">
+             進入系統
+          </button>
+       </div>
+    </div>
+  );
+};
+
 // --- 6. Main App Container ---
 
 function MainAppContent() {
-  const [activeTab, setActiveTab] = useState(() => {
-    try { 
-      const t = localStorage.getItem('bar_active_tab_v3');
-      const valid = ['recipes', 'featured', 'ingredients', 'quick', 'tools'];
-      return valid.includes(t) ? t : 'recipes';
-    } catch (e) { return 'recipes'; }
-  });
-  
+  const [activeTab, setActiveTab] = useState('recipes');
+   
+  // Login State
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [shopId, setShopId] = useState('');
+  const [userRole, setUserRole] = useState('customer'); // 'owner', 'staff', 'customer'
+   
   const [ingredients, setIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [sections, setSections] = useState([]);
-  const [shopId, setShopId] = useState(() => localStorage.getItem('bar_shop_id') || 'demo');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  
-  // Consumer Mode State & Password
-  const [isConsumerMode, setIsConsumerMode] = useState(() => {
-     try { return localStorage.getItem('bar_is_consumer_mode') === 'true'; } catch { return false; }
-  });
-  const [adminPassword, setAdminPassword] = useState(() => {
-     return localStorage.getItem('bar_admin_password') || '';
-  });
+   
+  // Local Settings
+  const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem('bar_admin_password') || '');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
-  const [newPasswordInput, setNewPasswordInput] = useState(''); // Setting new password
-  const [isSettingPassword, setIsSettingPassword] = useState(false); // Toggle for password setting UI
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   // Editor State
-  const [editorMode, setEditorMode] = useState(null); // 'ingredient' | 'recipe'
+  const [editorMode, setEditorMode] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
-  
-  // Viewer State
   const [viewingItem, setViewingItem] = useState(null);
 
   // Filter & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all');
-  
-  // Global Lists - Dynamic
+   
+  // Global Lists
   const [availableTags, setAvailableTags] = useState(['酸甜 Sour/Sweet', '草本 Herbal', '果香 Fruity', '煙燻 Smoky', '辛辣 Spicy', '苦味 Bitter']);
   const [availableTechniques, setAvailableTechniques] = useState(['Shake', 'Stir', 'Build', 'Roll', 'Blend']);
   const [availableGlasses, setAvailableGlasses] = useState(['Martini', 'Coupe', 'Rock', 'Highball', 'Collins', 'Shot']);
   const [availableBases, setAvailableBases] = useState(DEFAULT_BASE_SPIRITS);
-  
+   
   const [ingCategories, setIngCategories] = useState([
     { id: 'alcohol', label: '基酒 Alcohol' },
     { id: 'soft', label: '軟性飲料 Soft' },
     { id: 'other', label: '其他 Other' }
   ]);
 
-  // Dialog System
   const [dialog, setDialog] = useState({ isOpen: false, type: 'info', title: '', message: '', onConfirm: null });
 
-  // Load Excel Lib
+  // Init
   useEffect(() => {
+    // Load Excel Lib
     const script = document.createElement('script');
     script.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js";
     script.async = true;
@@ -1081,19 +1128,28 @@ function MainAppContent() {
     // Load Firebase
     loadFirebase().then(() => console.log("Firebase Loaded")).catch(err => console.error("Firebase Error", err));
     
-    // Network Status
+    // Check local session
+    const savedShop = localStorage.getItem('bar_shop_id');
+    const savedRole = localStorage.getItem('bar_user_role');
+    if (savedShop && savedRole) {
+        setShopId(savedShop);
+        setUserRole(savedRole);
+        // We don't auto-login owner for security, but for staff/customer it's fine
+        if (savedRole !== 'owner') setIsLoggedIn(true);
+    }
+    
     window.addEventListener('online', () => setIsOnline(true));
     window.addEventListener('offline', () => setIsOnline(false));
   }, []);
 
-  // --- Real-time Data Sync (Cloud + Local Fallback) ---
+  // Sync Logic
   useEffect(() => {
-     if (isOnline && window.firebase) {
+     if (isLoggedIn && shopId && window.firebase) {
         const db = window.firebase.firestore();
         const unsubIng = db.collection('shops').doc(shopId).collection('ingredients').onSnapshot(snap => {
            const list = snap.docs.map(d => d.data());
            setIngredients(list);
-           localStorage.setItem('bar_ingredients_v3', JSON.stringify(list)); // Update local cache
+           localStorage.setItem('bar_ingredients_v3', JSON.stringify(list)); 
         });
         const unsubRec = db.collection('shops').doc(shopId).collection('recipes').onSnapshot(snap => {
            const list = snap.docs.map(d => d.data());
@@ -1107,59 +1163,189 @@ function MainAppContent() {
         });
         return () => { unsubIng(); unsubRec(); unsubSec(); };
      } else {
-        // Load from Local if Offline
+        // Offline Fallback
         try {
             const i = localStorage.getItem('bar_ingredients_v3'); if(i) setIngredients(JSON.parse(i));
             const r = localStorage.getItem('bar_recipes_v3'); if(r) setRecipes(JSON.parse(r));
             const s = localStorage.getItem('bar_sections_v3'); if(s) setSections(JSON.parse(s));
         } catch(e) {}
      }
-  }, [shopId, isOnline]);
-  
-  // Only auto-save non-critical lists locally
-  useEffect(() => { localStorage.setItem('bar_tags_v3', JSON.stringify(availableTags)); }, [availableTags]);
-  useEffect(() => { localStorage.setItem('bar_active_tab_v3', activeTab); }, [activeTab]);
-  useEffect(() => { localStorage.setItem('bar_is_consumer_mode', isConsumerMode); }, [isConsumerMode]);
-  useEffect(() => { localStorage.setItem('bar_admin_password', adminPassword); }, [adminPassword]);
-  useEffect(() => { localStorage.setItem('bar_shop_id', shopId); }, [shopId]);
+  }, [shopId, isLoggedIn]);
+
+  const handleLogin = (sid, role) => {
+      setShopId(sid);
+      setUserRole(role);
+      setIsLoggedIn(true);
+      localStorage.setItem('bar_shop_id', sid);
+      localStorage.setItem('bar_user_role', role);
+      // If owner, verify password here in real app
+  };
+
+  const handleLogout = () => {
+      setIsLoggedIn(false);
+      localStorage.removeItem('bar_user_role');
+      setShopId('');
+      setIngredients([]);
+      setRecipes([]);
+  };
 
   const closeDialog = () => setDialog({ ...dialog, isOpen: false });
   const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
   const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
 
-  // Mode Switching Logic
-  const handleUnlockRequest = () => {
-      setShowPasswordModal(true);
-      setPasswordInput('');
-  };
-
+  // Mode Switching (Simulated for this version)
+  const handleUnlockRequest = () => { setShowPasswordModal(true); setPasswordInput(''); };
   const handleUnlockConfirm = () => {
       if (passwordInput === adminPassword) {
-          setIsConsumerMode(false);
+          setUserRole('owner'); // Upgrade to owner
           setShowPasswordModal(false);
-      } else {
-          alert("密碼錯誤");
-          setPasswordInput('');
-      }
+      } else { alert("密碼錯誤"); }
   };
-
   const handleSetPassword = () => {
       setAdminPassword(newPasswordInput);
+      localStorage.setItem('bar_admin_password', newPasswordInput);
       setIsSettingPassword(false);
       setNewPasswordInput('');
       showAlert('成功', '管理員密碼已更新');
   };
 
-  const toggleConsumerMode = () => {
-      // Enter consumer mode (no password needed to enter)
-      if(confirm("即將進入顧客模式。\n\n在此模式下，將隱藏所有成本資訊、編輯按鈕與設定頁面。\n若要退出，請點擊首頁右上角的鎖頭圖示並輸入密碼。")) {
-          setIsConsumerMode(true);
-          setActiveTab('recipes');
+  // --- RESTORED DATA FEATURES ---
+  
+  const handleExportJSON = () => {
+      const data = { ingredients, recipes, sections, version: '13.0' };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bar_manager_backup_${shopId}_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+  };
+
+  const handleImportJSON = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+          try {
+              const data = JSON.parse(e.target.result);
+              if (window.firebase && confirm('確定要還原備份嗎？這將覆蓋雲端現有資料。')) {
+                 const db = window.firebase.firestore();
+                 const batch = db.batch();
+                 
+                 // Restore Ingredients
+                 if (data.ingredients) {
+                     data.ingredients.forEach(i => {
+                         batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(i.id), i);
+                     });
+                 }
+                 // Restore Recipes
+                 if (data.recipes) {
+                     data.recipes.forEach(r => {
+                         batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(r.id), r);
+                     });
+                 }
+                 await batch.commit();
+                 showAlert('還原成功', '資料已從備份檔還原');
+              }
+          } catch (err) {
+              showAlert('錯誤', '無效的備份檔案');
+          }
+      };
+      reader.readAsText(file);
+  };
+  
+  const handleResetSystem = () => {
+      if (prompt('警告：此操作將刪除所有雲端資料且無法復原。\n請輸入 "RESET" 確認重置：') === 'RESET') {
+          if (window.firebase) {
+              const db = window.firebase.firestore();
+              ingredients.forEach(i => db.collection('shops').doc(shopId).collection('ingredients').doc(i.id).delete());
+              recipes.forEach(r => db.collection('shops').doc(shopId).collection('recipes').doc(r.id).delete());
+              showAlert('重置完成', '系統資料已清空');
+          }
       }
   };
 
+  const handleExcelExport = () => {
+     if (!window.XLSX) return alert("Excel 套件尚未載入");
+     const wb = window.XLSX.utils.book_new();
+     
+     // Ingredients Sheet
+     const ingData = ingredients.map(i => ({
+         ID: i.id, NameZh: i.nameZh, NameEn: i.nameEn, Type: i.type, SubType: i.subType, Price: i.price, Volume: i.volume, ABV: i.abv, AddToSingle: i.addToSingle ? 'Yes' : 'No'
+     }));
+     const wsIng = window.XLSX.utils.json_to_sheet(ingData);
+     window.XLSX.utils.book_append_sheet(wb, wsIng, "Ingredients");
+     
+     // Recipes Sheet
+     const recData = recipes.map(r => ({
+         ID: r.id, NameZh: r.nameZh, NameEn: r.nameEn, Type: r.type, Price: r.price, Base: r.baseSpirit
+     }));
+     const wsRec = window.XLSX.utils.json_to_sheet(recData);
+     window.XLSX.utils.book_append_sheet(wb, wsRec, "Recipes");
+     
+     window.XLSX.writeFile(wb, `bar_data_${shopId}.xlsx`);
+  };
+
+  const handleExcelImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!window.XLSX) return alert("Excel 套件尚未載入");
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = window.XLSX.read(data, {type: 'array'});
+        
+        if (window.firebase) {
+            const db = window.firebase.firestore();
+            const batch = db.batch();
+            
+            // Parse Ingredients
+            if (workbook.Sheets['Ingredients']) {
+                const rawIngs = window.XLSX.utils.sheet_to_json(workbook.Sheets['Ingredients']);
+                rawIngs.forEach(row => {
+                    const item = {
+                        id: row.ID || generateId(),
+                        nameZh: row.NameZh,
+                        nameEn: row.NameEn || '',
+                        type: row.Type || 'other',
+                        subType: row.SubType || '',
+                        price: row.Price || 0,
+                        volume: row.Volume || 700,
+                        abv: row.ABV || 0,
+                        unit: 'ml',
+                        addToSingle: row.AddToSingle === 'Yes'
+                    };
+                    batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(item.id), item);
+                });
+            }
+            
+            // Parse Recipes (Simplified)
+            if (workbook.Sheets['Recipes']) {
+                const rawRecs = window.XLSX.utils.sheet_to_json(workbook.Sheets['Recipes']);
+                rawRecs.forEach(row => {
+                     const item = {
+                        id: row.ID || generateId(),
+                        nameZh: row.NameZh,
+                        nameEn: row.NameEn || '',
+                        type: row.Type || 'classic',
+                        price: row.Price || 0,
+                        baseSpirit: row.Base || '',
+                        ingredients: [], 
+                        tags: []
+                     };
+                     batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(item.id), item);
+                });
+            }
+
+            await batch.commit();
+            showAlert('成功', 'Excel 資料已匯入雲端');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
   const handleBatchAddIngredients = async (newItems) => {
-    // Cloud Save
     if(window.firebase) {
         const db = window.firebase.firestore();
         const batch = db.batch();
@@ -1168,354 +1354,52 @@ function MainAppContent() {
             batch.set(ref, item);
         });
         await batch.commit();
-        showAlert('新增成功', `已成功同步 ${newItems.length} 項材料至雲端。`);
-    } else {
-        // Fallback Local
-        const newList = [...ingredients, ...newItems];
-        setIngredients(newList);
-        localStorage.setItem('bar_ingredients_v3', JSON.stringify(newList));
-        showAlert('離線模式', '已儲存至本地，連線後請手動同步。');
+        showAlert('同步成功', `已上傳 ${newItems.length} 項材料`);
     }
   };
 
   const requestDelete = async (id, type) => {
-    const title = type === 'recipe' ? '刪除酒譜' : '刪除材料';
-    if (type === 'ingredient') {
-      const inUseRecipes = recipes.filter(r => r.ingredients && r.ingredients.some(ing => ing.id === id));
-      if (inUseRecipes.length > 0) {
-         showAlert('無法刪除', `此材料正在被以下酒譜使用：\n${inUseRecipes.map(r => r.nameZh).join(', ')}\n\n請先將其從酒譜中移除。`);
-         return;
-      }
-    }
-    showConfirm(title, '確定要刪除嗎？此動作無法復原。', async () => {
+    if (userRole !== 'owner') return;
+    showConfirm('刪除確認', '確定要刪除嗎？', async () => {
        if (window.firebase) {
            const db = window.firebase.firestore();
            const collectionName = type === 'recipe' ? 'recipes' : 'ingredients';
            await db.collection('shops').doc(shopId).collection(collectionName).doc(id).delete();
-           showAlert('已刪除', '雲端資料已同步刪除');
-       } else {
-           // Local delete logic (same as before)
-           if (type === 'recipe') {
-                const newList = recipes.filter(r => r.id !== id);
-                setRecipes(newList);
-                localStorage.setItem('bar_recipes_v3', JSON.stringify(newList));
-           } else {
-                const newList = ingredients.filter(i => i.id !== id);
-                setIngredients(newList);
-                localStorage.setItem('bar_ingredients_v3', JSON.stringify(newList));
-           }
        }
     });
   };
 
-  const handleImport = (e, mode) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.name.endsWith('.xlsx')) {
-        handleExcelImport(file, mode);
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = JSON.parse(event.target.result);
-        let finalIngs = ingredients;
-        let finalRecs = recipes;
-
-        if (mode === 'overwrite') {
-           finalIngs = data.ingredients || [];
-           finalRecs = data.recipes || [];
-        } else {
-           const newIngs = (data.ingredients || []).filter(ni => !ingredients.some(ei => ei.id === ni.id));
-           const newRecs = (data.recipes || []).filter(nr => !recipes.some(er => er.id === nr.id));
-           finalIngs = [...ingredients, ...newIngs];
-           finalRecs = [...recipes, ...newRecs];
-        }
-
-        // Sync to Cloud if possible
-        if (window.firebase) {
-            const db = window.firebase.firestore();
-            const batch = db.batch(); // Note: Batch limit is 500 ops, for large data consider splitting
-            finalIngs.forEach(i => batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(i.id), i));
-            finalRecs.forEach(r => batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(r.id), r));
-            await batch.commit(); // This might fail if > 500, but for basic usage it's fine
-            showAlert('同步成功', '資料已匯入並同步至雲端');
-        } else {
-            setIngredients(finalIngs);
-            setRecipes(finalRecs);
-            localStorage.setItem('bar_ingredients_v3', JSON.stringify(finalIngs));
-            localStorage.setItem('bar_recipes_v3', JSON.stringify(finalRecs));
-            showAlert('匯入成功', '資料已儲存至本地');
-        }
-      } catch (err) {
-        showAlert('錯誤', '檔案格式不正確');
+  // Standard save item with cloud support
+  const saveItem = async (item, mode) => {
+      const db = window.firebase.firestore();
+      const col = mode === 'recipe' ? 'recipes' : 'ingredients';
+      
+      // Image compression before upload
+      if (item.image && item.image.startsWith('data:')) {
+          item.image = await compressImage(item.image);
+          await ImageDB.save(item.id, item.image); // Cache local
       }
-    };
-    reader.readAsText(file);
+
+      await db.collection('shops').doc(shopId).collection(col).doc(item.id).set(item);
+      setEditorMode(null);
   };
 
-  // --- Excel Functions ---
-  const handleExportExcel = () => {
-    if (!window.XLSX) return alert("Excel 套件尚未載入，請稍候再試");
-    
-    // 1. Ingredients Sheet
-    const ingData = ingredients.map(i => ({
-        ID: i.id,
-        NameZh: i.nameZh,
-        NameEn: i.nameEn,
-        Type: i.type,
-        SubType: i.subType || '',
-        Price: i.price,
-        Volume: i.volume,
-        ABV: i.abv,
-        AddToSingle: i.addToSingle ? 'Yes' : 'No'
-    }));
-    const wsIng = window.XLSX.utils.json_to_sheet(ingData);
-
-    // 2. Recipes Sheet
-    const recData = recipes.map(r => {
-        // Format ingredients as "Name:Amount, Name:Amount"
-        const ingStr = (r.ingredients || []).map(ingItem => {
-            const ingName = ingredients.find(i => i.id === ingItem.id)?.nameZh || 'Unknown';
-            return `${ingName}:${ingItem.amount}`;
-        }).join(', ');
-        
-        return {
-            ID: r.id,
-            NameZh: r.nameZh,
-            NameEn: r.nameEn,
-            Type: r.type,
-            Base: r.baseSpirit,
-            Technique: r.technique,
-            Glass: r.glass,
-            Ingredients: ingStr,
-            Garnish: r.garnish,
-            Price: r.price,
-            Desc: r.flavorDescription,
-            Tags: (r.tags || []).join(',')
-        };
-    });
-    const wsRec = window.XLSX.utils.json_to_sheet(recData);
-
-    // 3. Reference Sheet (New)
-    const refData = ingredients.map(i => ({
-        NameZh: i.nameZh,
-        NameEn: i.nameEn,
-        Category: i.type,
-        FullInfo: `${i.nameZh} (${i.type})`
-    }));
-    const wsRef = window.XLSX.utils.json_to_sheet(refData);
-
-    const wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, wsIng, "Ingredients");
-    window.XLSX.utils.book_append_sheet(wb, wsRec, "Recipes");
-    window.XLSX.utils.book_append_sheet(wb, wsRef, "References");
-    
-    window.XLSX.writeFile(wb, `BarManager_Backup_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const startEdit = (mode, item) => {
+      setEditorMode(mode);
+      setEditingItem(item || { id: generateId(), nameZh: '', ingredients: [], type: 'classic', targetCostRate: '' });
   };
 
-  const handleExcelImport = (file, mode) => {
-    if (!window.XLSX) return alert("Excel 套件尚未載入");
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = window.XLSX.read(data, {type: 'array'});
-        
-        // Parse Ingredients
-        const ingSheet = workbook.Sheets['Ingredients'];
-        const rawIngs = window.XLSX.utils.sheet_to_json(ingSheet);
-        const parsedIngs = rawIngs.map(row => ({
-            id: row.ID || generateId(),
-            nameZh: row.NameZh,
-            nameEn: row.NameEn || '',
-            type: row.Type || 'other',
-            subType: row.SubType || '',
-            price: row.Price || 0,
-            volume: row.Volume || 700,
-            abv: row.ABV || 0,
-            unit: 'ml',
-            addToSingle: row.AddToSingle === 'Yes'
-        }));
+  if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
 
-        // Parse Recipes
-        const recSheet = workbook.Sheets['Recipes'];
-        const rawRecs = window.XLSX.utils.sheet_to_json(recSheet);
-        const parsedRecs = rawRecs.map(row => {
-            // Parse ingredients string back to array
-            const ingList = [];
-            if (row.Ingredients) {
-                row.Ingredients.split(',').forEach(pair => {
-                    const [name, amount] = pair.split(':').map(s => s.trim());
-                    // Try to find matching ingredient by name (either existing or new)
-                    const match = parsedIngs.find(i => i.nameZh === name) || ingredients.find(i => i.nameZh === name);
-                    if (match) {
-                        ingList.push({ id: match.id, amount: Number(amount) });
-                    }
-                });
-            }
-
-            return {
-                id: row.ID || generateId(),
-                nameZh: row.NameZh,
-                nameEn: row.NameEn || '',
-                type: row.Type || 'classic',
-                baseSpirit: row.Base || '',
-                technique: row.Technique || 'Stir',
-                glass: row.Glass || 'Coupe',
-                ingredients: ingList,
-                garnish: row.Garnish || '',
-                price: row.Price || 0,
-                flavorDescription: row.Desc || '',
-                tags: row.Tags ? row.Tags.split(',') : [],
-                steps: '',
-                image: ''
-            };
-        });
-
-        let finalIngs = ingredients;
-        let finalRecs = recipes;
-
-        if (mode === 'overwrite') {
-            finalIngs = parsedIngs;
-            finalRecs = parsedRecs;
-        } else {
-            const newIngs = parsedIngs.filter(n => !ingredients.some(o => o.nameZh === n.nameZh));
-            const newRecs = parsedRecs; // Always add for recipes to avoid complexity
-            finalIngs = [...ingredients, ...newIngs];
-            finalRecs = [...recipes, ...newRecs];
-        }
-
-        if (window.firebase) {
-            const db = window.firebase.firestore();
-            const batch = db.batch();
-            // CAUTION: Batch has 500 limit. For demo, we assume small data.
-            finalIngs.slice(0, 250).forEach(i => batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(i.id), i));
-            finalRecs.slice(0, 240).forEach(r => batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(r.id), r));
-            await batch.commit();
-            showAlert('同步成功', 'Excel 資料已上傳至雲端');
-        } else {
-            setIngredients(finalIngs);
-            setRecipes(finalRecs);
-            localStorage.setItem('bar_ingredients_v3', JSON.stringify(finalIngs));
-            localStorage.setItem('bar_recipes_v3', JSON.stringify(finalRecs));
-            showAlert('匯入成功', '已匯入至本地');
-        }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const startEdit = (mode, item = null) => {
-    setEditorMode(mode);
-    if (item) {
-      setEditingItem({ ...item });
-    } else {
-      if (mode === 'recipe') {
-        setEditingItem({
-           id: generateId(),
-           nameZh: '', nameEn: '', type: 'classic', baseSpirit: '',
-           price: 0, technique: 'Stir', glass: 'Coupe',
-           ingredients: [], steps: '', tags: [], image: '', flavorDescription: '',
-           garnish: '', 
-           bottleCost: '', bottleCapacity: 700, priceShot: '', priceGlass: '', priceBottle: '', targetCostRate: 25 
-        });
-      } else {
-        setEditingItem({
-           id: generateId(),
-           nameZh: '', nameEn: '', type: 'other', subType: '',
-           price: 0, volume: 700, unit: 'ml', abv: 0, addToSingle: false, targetCostRate: 25
-        });
-      }
-    }
-  };
-
-  const saveItem = async () => {
-    if (!editingItem.nameZh) return showAlert('錯誤', '請輸入名稱');
-    
-    let itemToSave = { ...editingItem };
-    
-    // Cloud Image Handling
-    if (itemToSave.image && itemToSave.image.startsWith('data:')) {
-       try {
-         // Compress before saving to cloud
-         if (window.firebase) {
-             const compressed = await compressImage(itemToSave.image);
-             // Save to IndexedDB for fast local access
-             await ImageDB.save(itemToSave.id, compressed);
-             // Also save base64 string to Firestore (not ideal for large apps, but fine for this scale)
-             itemToSave.image = compressed; 
-         } else {
-             await ImageDB.save(itemToSave.id, itemToSave.image);
-             itemToSave.image = itemToSave.id; // Store ID for local only
-         }
-       } catch (e) {
-         console.error("Image Save Failed", e);
-         return showAlert('儲存失敗', '圖片處理錯誤');
-       }
-    }
-
-    if (window.firebase) {
-        const db = window.firebase.firestore();
-        const collectionName = editorMode === 'recipe' ? 'recipes' : 'ingredients';
-        await db.collection('shops').doc(shopId).collection(collectionName).doc(itemToSave.id).set(itemToSave);
-        // No need to set state manually, onSnapshot will handle it
-    } else {
-        // Fallback Local Storage Logic
-        let newList;
-        let key;
-        if (editorMode === 'ingredient') {
-            key = 'bar_ingredients_v3';
-            const exists = ingredients.find(i => i.id === itemToSave.id);
-            newList = exists ? ingredients.map(i => i.id === itemToSave.id ? itemToSave : i) : [...ingredients, itemToSave];
-            setIngredients(newList);
-        } else {
-            key = 'bar_recipes_v3';
-            const exists = recipes.find(r => r.id === itemToSave.id);
-            newList = exists ? recipes.map(r => r.id === itemToSave.id ? itemToSave : r) : [...recipes, itemToSave];
-            setRecipes(newList);
-        }
-        localStorage.setItem(key, JSON.stringify(newList));
-    }
-    
-    setEditorMode(null);
-    setEditingItem(null);
-    if(viewingItem && viewingItem.id === itemToSave.id) setViewingItem(itemToSave);
-  };
+  // Permissions
+  const canEdit = userRole === 'owner';
+  const showCost = userRole === 'owner';
+  const showInventory = userRole === 'owner' || userRole === 'staff';
 
   return (
-    <div className="fixed inset-0 bg-slate-950 text-slate-200 font-sans selection:bg-amber-500/30 w-full flex flex-col overflow-hidden">
-      <style>{`
-        :root { font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif; line-height: 1.5; font-weight: 400; }
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #020617; display: block !important; place-items: unset !important; min-width: 0 !important; }
-        #root { max-width: none !important; margin: 0 !important; padding: 0 !important; width: 100% !important; text-align: left !important; display: block !important; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        @keyframes scale-in { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        .animate-fade-in { animation: fade-in 0.3s ease-out; }
-        .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        .animate-scale-in { animation: scale-in 0.2s ease-out; }
-        .safe-top { padding-top: env(safe-area-inset-top); }
-        .pt-safe { padding-top: env(safe-area-inset-top); }
-        .mt-safe { margin-top: env(safe-area-inset-top); }
-        .pt-safe-offset { padding-top: calc(12px + env(safe-area-inset-top)); }
-        /* Tap Highlight Removal */
-        * { -webkit-tap-highlight-color: transparent !important; }
-        *:focus { outline: none !important; box-shadow: none !important; }
-        input:focus, select:focus, textarea:focus { border-color: #f59e0b !important; box-shadow: 0 0 0 1px #f59e0b !important; outline: none !important; }
-      `}</style>
+    <div className="fixed inset-0 bg-slate-950 text-slate-200 font-sans flex flex-col w-full">
+      <style>{`:root{color-scheme:dark}.pt-safe{padding-top:env(safe-area-inset-top)}.pb-safe{padding-bottom:env(safe-area-inset-bottom)}.custom-scrollbar::-webkit-scrollbar{width:4px;background:#1e293b}.custom-scrollbar::-webkit-scrollbar-thumb{background:#475569;border-radius:2px}`}</style>
       
-      {isConsumerMode && (
-         <div className="absolute top-4 right-4 z-50 pt-safe">
-             {/* 獨立顯示在右上角的解鎖按鈕，避免與篩選器重疊 */}
-             <button onClick={handleUnlockRequest} className="p-2 rounded-full bg-slate-900 border border-slate-800 text-slate-600 hover:text-white shadow-lg"><Lock size={18}/></button>
-         </div>
-      )}
-
       <main className="flex-1 relative overflow-hidden w-full">
         {activeTab === 'recipes' && (
           <RecipeListScreen 
@@ -1529,12 +1413,12 @@ function MainAppContent() {
             setViewingItem={setViewingItem} 
             availableTags={availableTags} 
             availableBases={availableBases}
-            isConsumerMode={isConsumerMode}
-            onUnlock={handleUnlockRequest} // Pass unlock handler if needed
+            isConsumerMode={!canEdit} // Reusing this prop for UI layout
+            userRole={userRole}
+            onUnlock={handleUnlockRequest}
           />
         )}
         
-        {/* 獨立的專區頁面 */}
         {activeTab === 'featured' && (
            <FeaturedSectionScreen 
              sections={sections} 
@@ -1543,12 +1427,13 @@ function MainAppContent() {
              setViewingItem={setViewingItem} 
              ingredients={ingredients}
              showConfirm={showConfirm}
-             isConsumerMode={isConsumerMode}
-             onUnlock={handleUnlockRequest} // Also pass here
+             isConsumerMode={!canEdit}
+             userRole={userRole}
+             onUnlock={handleUnlockRequest}
            />
         )}
 
-        {activeTab === 'ingredients' && !isConsumerMode && (
+        {activeTab === 'ingredients' && showInventory && (
           <InventoryScreen 
             ingredients={ingredients} 
             startEdit={startEdit} 
@@ -1560,138 +1445,112 @@ function MainAppContent() {
             availableBases={availableBases}
           />
         )}
-        {activeTab === 'quick' && !isConsumerMode && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
-        {activeTab === 'tools' && !isConsumerMode && (
-           <div className="h-full flex flex-col overflow-y-auto p-6 text-center space-y-6 pt-20 w-full custom-scrollbar pb-24">
-             <div className="w-20 h-20 bg-slate-800 rounded-full mx-auto flex items-center justify-center border border-slate-700 shadow-lg shadow-amber-900/10"><Wine size={32} className="text-amber-500"/></div>
-             <h2 className="text-xl font-serif text-slate-200">Bar Manager v13.0 (Cloud)</h2>
-             
-             {/* 雲端狀態與商店 ID 設定 */}
-             <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 w-full">
-                <div className="flex justify-between items-center mb-2">
-                   <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${isOnline && window.firebase ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                      <span className="text-xs font-bold text-slate-300">雲端狀態: {isOnline && window.firebase ? '已連線' : '離線 (本地模式)'}</span>
-                   </div>
-                   <Cloud size={16} className={isOnline ? 'text-emerald-500' : 'text-slate-600'}/>
-                </div>
-                
-                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
-                    <div className="text-left">
-                        <div className="text-[10px] text-slate-500 uppercase font-bold">目前商店 ID (Shop ID)</div>
-                        <input value={shopId} onChange={e => setShopId(e.target.value)} className="bg-transparent text-white font-mono font-bold outline-none w-32" placeholder="輸入商店ID"/>
-                    </div>
-                    <div className="text-xs text-slate-500">
-                        <Users size={16}/>
-                    </div>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-2 text-left">
-                   * 與朋友使用相同的 ID 即可同步資料。
-                </p>
+        {activeTab === 'quick' && canEdit && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
+        
+        {activeTab === 'tools' && canEdit && (
+           <div className="h-full flex flex-col overflow-y-auto p-6 space-y-6 pt-20 custom-scrollbar pb-24">
+             <div className="text-center">
+                 <h2 className="text-xl font-serif text-white">Bar Manager Cloud</h2>
+                 <p className="text-xs text-slate-500">Shop ID: {shopId}</p>
              </div>
              
-             {/* 密碼設定區塊 */}
-             <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 w-full text-left">
-                <div className="flex justify-between items-center mb-2">
-                   <h3 className="text-sm font-bold text-white flex items-center gap-2"><KeyRound size={16} className="text-amber-500"/> 管理員密碼設定</h3>
-                   <button onClick={() => setIsSettingPassword(!isSettingPassword)} className="text-xs text-amber-500 hover:text-amber-400">{isSettingPassword ? '取消' : '修改'}</button>
-                </div>
-                {isSettingPassword ? (
-                   <div className="flex gap-2 mt-2 animate-fade-in">
-                      <input type="text" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none" placeholder="輸入新密碼"/>
-                      <button onClick={handleSetPassword} className="bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-bold">儲存</button>
-                   </div>
-                ) : (
-                   <p className="text-xs text-slate-500">目前密碼: {adminPassword ? '******' : '(未設定，預設無密碼)'}</p>
-                )}
+             <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
+                 <h3 className="text-sm font-bold text-white flex gap-2 items-center"><KeyRound size={16}/> 管理員密碼</h3>
+                 {isSettingPassword ? (
+                    <div className="flex gap-2">
+                        <input value={newPasswordInput} onChange={e=>setNewPasswordInput(e.target.value)} className="bg-slate-800 border border-slate-600 rounded px-2 py-1 flex-1 text-sm"/>
+                        <button onClick={handleSetPassword} className="bg-amber-600 text-white px-3 rounded text-xs">儲存</button>
+                    </div>
+                 ) : <button onClick={()=>setIsSettingPassword(true)} className="text-xs text-amber-500">修改密碼</button>}
+             </div>
+             
+             {/* RESTORED DATA MANAGEMENT UI */}
+             <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
+                 <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Database size={16}/> 資料庫管理</h3>
+                 <div className="grid grid-cols-2 gap-3">
+                    <button onClick={handleExportJSON} className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300">
+                        <Download size={20} className="mb-1 text-amber-500"/>
+                        <span className="text-xs">備份 (JSON)</span>
+                    </button>
+                    <label className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300 cursor-pointer">
+                        <Upload size={20} className="mb-1 text-blue-500"/>
+                        <span className="text-xs">還原 (JSON)</span>
+                        <input type="file" hidden accept=".json" onChange={handleImportJSON}/>
+                    </label>
+                    <button onClick={handleExcelExport} className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300">
+                        <FileSpreadsheet size={20} className="mb-1 text-emerald-500"/>
+                        <span className="text-xs">匯出 Excel</span>
+                    </button>
+                    <label className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300 cursor-pointer">
+                        <FilePlus size={20} className="mb-1 text-emerald-500"/>
+                        <span className="text-xs">匯入 Excel</span>
+                        <input type="file" hidden accept=".xlsx" onChange={handleExcelImport}/>
+                    </label>
+                 </div>
+                 <button onClick={handleResetSystem} className="w-full py-3 border border-rose-900/50 text-rose-500 rounded-xl hover:bg-rose-900/20 text-xs font-bold flex items-center justify-center gap-2">
+                    <RefreshCcw size={14}/> 重置系統 (危險)
+                 </button>
+             </div>
+             
+             {/* CUSTOMER MODE TOGGLE */}
+             <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
+                 <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Users size={16}/> 訪客模式</h3>
+                 <button onClick={() => setUserRole('customer')} className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                    <Lock size={16}/> 鎖定為顧客模式
+                 </button>
              </div>
 
              <div className="space-y-3">
-               <button onClick={toggleConsumerMode} className="w-full bg-blue-900/30 border border-blue-800 p-4 rounded-xl flex items-center gap-4 hover:bg-blue-900/50 transition group">
-                   <div className="p-2 bg-blue-900 rounded-lg group-hover:scale-110 transition-transform"><Lock className="text-blue-300"/></div>
-                   <div className="text-left"><div className="text-blue-400 font-bold">進入顧客閱覽模式</div><div className="text-xs text-blue-500/70">隱藏編輯/成本資訊 (需密碼解鎖)</div></div>
-               </button>
-               
-               <button onClick={() => { const data = JSON.stringify({ingredients, recipes, sections}); const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `bar_backup_${new Date().toISOString().slice(0,10)}.json`; a.click(); }} className="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center gap-4 hover:bg-slate-700 transition"><Download className="text-blue-400"/><div className="text-left"><div className="text-slate-200 font-bold">匯出 JSON 備份</div><div className="text-xs text-slate-500">完整備份到手機</div></div></button>
-               
-               <button onClick={handleExportExcel} className="w-full bg-emerald-900/30 border border-emerald-800 p-4 rounded-xl flex items-center gap-4 hover:bg-emerald-900/50 transition"><FileSpreadsheet className="text-emerald-500"/><div className="text-left"><div className="text-emerald-500 font-bold">匯出 Excel (.xlsx)</div><div className="text-xs text-emerald-600/70">方便在電腦編輯</div></div></button>
-
-               <label className="w-full bg-emerald-900/30 border border-emerald-800 p-4 rounded-xl flex items-center gap-4 hover:bg-emerald-900/50 transition cursor-pointer">
-                 <div className="p-2 bg-emerald-900/50 text-emerald-400 rounded-lg"><Upload size={24}/></div>
-                 <div className="text-left flex-1"><div className="text-emerald-400 font-bold">匯入 Excel (.xlsx)</div><div className="text-xs text-emerald-600/70">批次新增/更新資料</div></div>
-                 <input type="file" className="hidden" accept=".xlsx, .json" onChange={(e) => handleImport(e, 'merge')}/>
-               </label>
-               
-               <label className="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center gap-4 hover:bg-slate-700 transition cursor-pointer">
-                 <div className="p-2 bg-blue-900/30 text-blue-400 rounded-lg"><FilePlus size={24}/></div>
-                 <div className="text-left flex-1"><div className="text-blue-400 font-bold">JSON 智慧合併</div><div className="text-xs text-slate-500">保留現有資料，加入備份檔</div></div>
-                 <input type="file" className="hidden" accept=".json" onChange={(e) => handleImport(e, 'merge')}/>
-               </label>
-
-               <label className="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center gap-4 hover:bg-slate-700 transition cursor-pointer">
-                 <div className="p-2 bg-amber-900/30 text-amber-400 rounded-lg"><Upload size={24}/></div>
-                 <div className="text-left flex-1"><div className="text-amber-400 font-bold">JSON 覆蓋還原</div><div className="text-xs text-slate-500">清空現有資料，完全還原</div></div>
-                 <input type="file" className="hidden" accept=".json" onChange={(e) => handleImport(e, 'overwrite')}/>
-               </label>
-
-               <button onClick={() => { showConfirm('重置系統', '警告：此操作將刪除所有資料且無法還原。確定要繼續嗎？', () => { localStorage.clear(); location.reload(); }); }} className="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl flex items-center gap-4 hover:bg-rose-900/20 transition group"><RefreshCcw className="text-rose-500 group-hover:rotate-180 transition-transform duration-500"/><div className="text-left"><div className="text-rose-500 font-bold">重置系統</div><div className="text-xs text-rose-500/50">刪除所有資料</div></div></button>
+                 <button onClick={handleLogout} className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2"><LogOut size={18}/> 登出 / 切換商店</button>
              </div>
            </div>
         )}
       </main>
 
-      {/* Password Modal */}
+      {/* Overlays */}
       {showPasswordModal && (
-          <div className="fixed inset-0 z-[80] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6 shadow-2xl animate-scale-in">
+          <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6">
+              <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6">
                   <h3 className="text-xl font-bold text-white mb-4 text-center">管理員解鎖</h3>
-                  <input type="password" autoFocus value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-center text-white outline-none focus:border-amber-500 mb-4 tracking-widest text-lg" placeholder="輸入密碼"/>
-                  <div className="flex gap-3">
-                      <button onClick={() => { setShowPasswordModal(false); setPasswordInput(''); }} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl font-bold">取消</button>
-                      <button onClick={handleUnlockConfirm} className="flex-1 py-3 bg-amber-600 text-white rounded-xl font-bold shadow-lg">確認</button>
-                  </div>
+                  <input type="password" autoFocus value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-center text-white mb-4"/>
+                  <div className="flex gap-3"><button onClick={()=>setShowPasswordModal(false)} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl">取消</button><button onClick={handleUnlockConfirm} className="flex-1 py-3 bg-amber-600 text-white rounded-xl">確認</button></div>
               </div>
           </div>
       )}
 
       {dialog.isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl shadow-2xl p-6 animate-scale-in">
-            <div className="flex flex-col items-center text-center space-y-4">
-               {dialog.type === 'alert' ? <div className="w-12 h-12 rounded-full bg-rose-900/30 flex items-center justify-center text-rose-500"><AlertCircle size={32}/></div> : <div className="w-12 h-12 rounded-full bg-amber-900/30 flex items-center justify-center text-amber-500"><AlertTriangle size={32}/></div>}
-               <h3 className="text-xl font-bold text-white">{dialog.title}</h3>
-               <p className="text-slate-300 text-sm whitespace-pre-wrap">{dialog.message}</p>
-               <div className="flex gap-3 w-full pt-2">
-                 {dialog.type === 'confirm' && <button onClick={closeDialog} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold text-sm">取消</button>}
-                 <button onClick={() => { if(dialog.onConfirm) dialog.onConfirm(); closeDialog(); }} className={`flex-1 py-3 rounded-xl font-bold text-sm text-white ${dialog.type === 'confirm' ? 'bg-rose-600 hover:bg-rose-500' : 'bg-slate-700 hover:bg-slate-600'}`}>{dialog.type === 'confirm' ? '確認刪除' : '我知道了'}</button>
-               </div>
-            </div>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6 text-center">
+             <h3 className="text-xl font-bold text-white mb-2">{dialog.title}</h3>
+             <p className="text-slate-400 text-sm mb-4">{dialog.message}</p>
+             <div className="flex gap-2">
+                 {dialog.type === 'confirm' && <button onClick={closeDialog} className="flex-1 py-3 bg-slate-800 rounded-xl text-slate-400">取消</button>}
+                 <button onClick={()=>{if(dialog.onConfirm)dialog.onConfirm();closeDialog();}} className="flex-1 py-3 bg-amber-600 rounded-xl text-white">確認</button>
+             </div>
           </div>
         </div>
       )}
 
-      <nav className="shrink-0 bg-slate-950/90 backdrop-blur border-t border-slate-800 pb-safe z-30 w-full">
-        <div className="w-full flex justify-around items-center h-16 w-full px-1">
-          {[
-            { id: 'recipes', icon: Beer, label: '酒單' },
-            { id: 'featured', icon: Star, label: '專區' }, 
-            !isConsumerMode && { id: 'ingredients', icon: GlassWater, label: '材料庫' },
-            !isConsumerMode && { id: 'quick', icon: Calculator, label: '速算' },
-            !isConsumerMode && { id: 'tools', icon: Settings, label: '設定' }
-          ].filter(Boolean).map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 flex-1 transition-all duration-300 ${activeTab === tab.id ? 'text-amber-500 -translate-y-1' : 'text-slate-600 hover:text-slate-400'}`}>
-              <tab.icon size={22} strokeWidth={activeTab === tab.id ? 2.5 : 2} className={activeTab === tab.id ? 'fill-amber-500/10' : ''} />
-              <span className="text-[10px] font-medium tracking-wide">{tab.label}</span>
-            </button>
-          ))}
-        </div>
+      <nav className="shrink-0 bg-slate-950 border-t border-slate-800 pb-safe z-30 w-full flex justify-around h-16 items-center">
+         {[
+           { id: 'recipes', icon: Beer, l: '酒單' },
+           { id: 'featured', icon: Star, l: '專區' }, 
+           showInventory && { id: 'ingredients', icon: GlassWater, l: '材料' },
+           canEdit && { id: 'quick', icon: Calculator, l: '速算' },
+           canEdit && { id: 'tools', icon: Settings, l: '設定' }
+         ].filter(Boolean).map(t => (
+           <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`flex flex-col items-center gap-1 ${activeTab===t.id ? 'text-amber-500' : 'text-slate-500'}`}>
+              <t.icon size={22} />
+              <span className="text-[10px] font-bold">{t.l}</span>
+           </button>
+         ))}
       </nav>
 
       <EditorSheet 
         mode={editorMode} 
         item={editingItem} 
         setItem={setEditingItem} 
-        onSave={saveItem} 
+        onSave={()=>saveItem(editingItem, editorMode)} 
         onClose={() => setEditorMode(null)} 
         ingredients={ingredients} 
         availableTechniques={availableTechniques} 
@@ -1707,7 +1566,7 @@ function MainAppContent() {
         setIngCategories={setIngCategories} 
         showAlert={showAlert} 
       />
-      <ViewerOverlay item={viewingItem} onClose={() => setViewingItem(null)} ingredients={ingredients} startEdit={startEdit} requestDelete={requestDelete} isConsumerMode={isConsumerMode} />
+      <ViewerOverlay item={viewingItem} onClose={() => setViewingItem(null)} ingredients={ingredients} startEdit={(m, i) => startEdit(m, i)} isConsumerMode={!canEdit} />
     </div>
   );
 }
