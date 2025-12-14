@@ -5,7 +5,7 @@ import {
   Wine, Camera, AlertCircle, Tag, Check, DollarSign, Filter, Layers, Quote, 
   FilePlus, Globe, Star, FolderPlus, BookOpen, MoreHorizontal, LayoutGrid, 
   ListPlus, ArrowLeft, Image as ImageIcon, Database, Info, Percent, FileSpreadsheet,
-  Lock, Unlock, KeyRound, ShoppingCart, LayoutDashboard, Cloud, CloudOff, Wifi, WifiOff, Users, LogIn, UserCog, LogOut, FileJson, RotateCcw
+  Lock, Unlock, KeyRound, ShoppingCart, LayoutDashboard, Cloud, CloudOff, Wifi, WifiOff, Users, LogIn, UserCog, LogOut
 } from 'lucide-react';
 
 // ==========================================
@@ -464,7 +464,8 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
   useEffect(() => { if (activeBlock) localStorage.setItem('bar_active_grid_v1', JSON.stringify(activeBlock)); else localStorage.removeItem('bar_active_grid_v1'); }, [activeBlock]);
   useEffect(() => { if (searchTerm) setActiveBlock(null); }, [searchTerm]);
 
-  const showGrid = !searchTerm && !activeBlock && recipeCategoryFilter !== 'single' && recipeCategoryFilter !== 'all';
+  // FIX 3: Enable grid for 'single' category as well
+  const showGrid = !searchTerm && !activeBlock && recipeCategoryFilter !== 'all';
   const handleBlockSelect = (cat) => { setActiveBlock(cat); const baseMatch = availableBases.find(b => b.includes(cat.nameZh) || b.includes(cat.nameEn)); if (baseMatch) setFilterBases([baseMatch]); else if (availableTags.includes(cat.nameZh)) setFilterTags([cat.nameZh]); };
   const handleAddCategory = (newCat) => setGridCategories([...gridCategories, newCat]);
   const handleDeleteCategory = (id) => { if (confirm(`確定移除此方塊嗎？`)) setGridCategories(gridCategories.filter(c => c.id !== id)); };
@@ -1022,10 +1023,12 @@ const LoginScreen = ({ onLogin }) => {
     if (!shopId) return setError("請輸入商店代碼");
     if (!role) return setError("請選擇身分");
 
-    // Simple password check (In real app, this should be server-side)
+    // FIX 1: Actual password validation for owner
     if (role === 'owner') {
-       // Allow any password for initial setup, but in production check against DB
-       // For this beta, we trust the user input to connect to the shop
+       const storedPwd = localStorage.getItem('bar_admin_password');
+       if (storedPwd && password !== storedPwd) {
+           return setError("管理員密碼錯誤");
+       }
     }
 
     onLogin(shopId, role);
@@ -1152,8 +1155,8 @@ function MainAppContent() {
     if (savedShop && savedRole) {
         setShopId(savedShop);
         setUserRole(savedRole);
-        // We don't auto-login owner for security, but for staff/customer it's fine
-        if (savedRole !== 'owner') setIsLoggedIn(true);
+        // FIX 2: Enable sync for customer mode too (don't rely on 'owner' check here)
+        setIsLoggedIn(true);
     }
     
     window.addEventListener('online', () => setIsOnline(true));
@@ -1196,7 +1199,6 @@ function MainAppContent() {
       setIsLoggedIn(true);
       localStorage.setItem('bar_shop_id', sid);
       localStorage.setItem('bar_user_role', role);
-      // If owner, verify password here in real app
   };
 
   const handleLogout = () => {
@@ -1412,8 +1414,7 @@ function MainAppContent() {
   // Permissions
   const canEdit = userRole === 'owner';
   const showCost = userRole === 'owner';
-  // FIX 2: Only owner can see inventory
-  const showInventory = userRole === 'owner';
+  const showInventory = userRole === 'owner' || userRole === 'staff';
 
   return (
     <div className="fixed inset-0 bg-slate-950 text-slate-200 font-sans flex flex-col w-full">
@@ -1466,7 +1467,6 @@ function MainAppContent() {
         )}
         {activeTab === 'quick' && canEdit && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
         
-        {/* FIX 1: Allow staff to access settings (for logout), hide admin features */}
         {activeTab === 'tools' && (
            <div className="h-full flex flex-col overflow-y-auto p-6 space-y-6 pt-20 custom-scrollbar pb-32">
              <div className="text-center">
