@@ -21,7 +21,7 @@ const FIREBASE_CONFIG = {
   appId: "1:836067365212:web:65cd66157b85d76afab199"
 };
 
-// Lazy load Firebase SDK to avoid initial crash
+// Lazy load Firebase SDK
 const loadFirebase = () => {
   return new Promise((resolve, reject) => {
     if (window.firebase && window.firebase.firestore) return resolve(window.firebase);
@@ -192,7 +192,7 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 const safeString = (str) => (str || '').toString();
 const safeNumber = (num) => { const n = parseFloat(num); return isNaN(n) ? 0 : n; };
 
-// 強化版計算邏輯 (無融水)
+// 強化版計算邏輯
 const calculateRecipeStats = (recipe, allIngredients) => {
   if (!recipe) return { cost: 0, costRate: 0, abv: 0, volume: 0, price: 0, finalAbv: 0 };
   if (recipe.type === 'single' || recipe.isIngredient) {
@@ -292,13 +292,8 @@ const IngredientRow = memo(({ ing, onClick, onDelete, readOnly }) => (
 const RecipeCard = memo(({ recipe, ingredients, onClick, role }) => {
   const stats = useMemo(() => calculateRecipeStats(recipe, ingredients), [recipe, ingredients]);
   const isSingle = recipe.type === 'single' || recipe.isIngredient;
-  // If role is 'customer' or 'staff', hide costs/edit. But staff needs separate logic, handled by parent.
-  // Here we use 'role' prop: 'owner', 'staff', 'customer'
   const isOwner = role === 'owner';
-   
-  const displayPrice = isSingle 
-      ? (recipe.priceGlass || recipe.priceShot || '-') 
-      : (recipe.price || stats.price);
+  const displayPrice = isSingle ? (recipe.priceGlass || recipe.priceShot || '-') : (recipe.price || stats.price);
 
   return (
     <div onClick={() => onClick(recipe)} className="group bg-slate-800 rounded-2xl overflow-hidden shadow-lg border border-slate-800 hover:border-slate-700 transition-all active:scale-[0.98] flex flex-row h-36 w-full cursor-pointer">
@@ -404,7 +399,8 @@ const IngredientPickerModal = ({ isOpen, onClose, onSelect, ingredients, categor
   return (
     <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex flex-col animate-fade-in sm:p-10">
        <div className="bg-slate-950 w-full max-w-lg mx-auto h-full sm:h-auto sm:max-h-[80vh] sm:rounded-2xl flex flex-col border border-slate-800 shadow-2xl overflow-hidden">
-          <div className="px-4 pb-4 pt-12 sm:pt-4 border-b border-slate-800 flex items-center gap-3 shrink-0">
+          {/* FIX 1: Increased top padding for better accessibility */}
+          <div className="px-4 pb-4 pt-16 sm:pt-6 border-b border-slate-800 flex items-center gap-3 shrink-0">
              <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><ChevronLeft/></button>
              <div className="flex-1 relative">
                 <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4"/>
@@ -444,38 +440,35 @@ const IngredientPickerModal = ({ isOpen, onClose, onSelect, ingredients, categor
     </div>
   );
 };
+
 // ==========================================
 // 4. Screens
 // ==========================================
 
-const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, recipeCategoryFilter, setRecipeCategoryFilter, startEdit, setViewingItem, availableTags, availableBases, userRole, onUnlock }) => {
+// FIX 2: Modified RecipeListScreen to accept synced categories via props
+const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, recipeCategoryFilter, setRecipeCategoryFilter, startEdit, setViewingItem, availableTags, availableBases, userRole, onUnlock, categories, onAddCategory, onDeleteCategory }) => {
   const [filterBases, setFilterBases] = useState([]);
   const [filterTags, setFilterTags] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [activeBlock, setActiveBlock] = useState(() => { try { const saved = localStorage.getItem('bar_active_grid_v1'); return saved ? JSON.parse(saved) : null; } catch { return null; } });
+  const [activeBlock, setActiveBlock] = useState(null);
   const [isGridEditing, setIsGridEditing] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
-  const [gridCategories, setGridCategories] = useState(() => { try { const saved = localStorage.getItem('bar_grid_cats_v3'); if (saved) return JSON.parse(saved); } catch (e) {} return [ { id: 'gin', nameZh: 'Gin', nameEn: '琴酒', iconType: 'martini', gradient: 'from-blue-600 to-indigo-700' }, { id: 'whisky', nameZh: 'Whisky', nameEn: '威士忌', iconType: 'whisky', gradient: 'from-amber-600 to-orange-700' }, { id: 'rum', nameZh: 'Rum', nameEn: '蘭姆酒', iconType: 'highball', gradient: 'from-rose-600 to-pink-700' }, { id: 'tequila', nameZh: 'Tequila', nameEn: '龍舌蘭', iconType: 'shot', gradient: 'from-emerald-600 to-teal-700' }, { id: 'vodka', nameZh: 'Vodka', nameEn: '伏特加', iconType: 'martini', gradient: 'from-cyan-600 to-blue-700' }, { id: 'brandy', nameZh: 'Brandy', nameEn: '白蘭地', iconType: 'snifter', gradient: 'from-purple-600 to-violet-700' }, ]; });
 
-  useEffect(() => { localStorage.setItem('bar_grid_cats_v3', JSON.stringify(gridCategories)); }, [gridCategories]);
-  useEffect(() => { if (activeBlock) localStorage.setItem('bar_active_grid_v1', JSON.stringify(activeBlock)); else localStorage.removeItem('bar_active_grid_v1'); }, [activeBlock]);
   useEffect(() => { if (searchTerm) setActiveBlock(null); }, [searchTerm]);
 
-  // FIX 3: Enable grid for 'single' category as well (Show grid unless 'all' is selected)
   const showGrid = !searchTerm && !activeBlock && recipeCategoryFilter !== 'all';
   
   const handleBlockSelect = (cat) => { setActiveBlock(cat); const baseMatch = availableBases.find(b => b.includes(cat.nameZh) || b.includes(cat.nameEn)); if (baseMatch) setFilterBases([baseMatch]); else if (availableTags.includes(cat.nameZh)) setFilterTags([cat.nameZh]); };
-  const handleAddCategory = (newCat) => setGridCategories([...gridCategories, newCat]);
-  const handleDeleteCategory = (id) => { if (confirm(`確定移除此方塊嗎？`)) setGridCategories(gridCategories.filter(c => c.id !== id)); };
   const clearBlockFilter = () => { setActiveBlock(null); setFilterBases([]); setFilterTags([]); };
 
   const filtered = useMemo(() => {
     const safeIngs = Array.isArray(ingredients) ? ingredients : [];
     const safeRecipes = Array.isArray(recipes) ? recipes : [];
-    // Include single items
+// 修正：包含單品在內的篩選邏輯，並確保單品頁面也能顯示分類
     const singleIngredients = safeIngs.filter(i => i.addToSingle).map(i => ({ ...i, category: 'single', type: 'single', baseSpirit: i.subType || '', priceShot: i.priceShot || '', priceGlass: i.priceGlass || '', priceBottle: i.priceBottle || '', targetCostRate: i.targetCostRate || 25, isIngredient: true }));
-    
     let sourceList = safeRecipes;
+    
+    // 如果是單品或全部，把單品材料加進來
     if (recipeCategoryFilter === 'single' || recipeCategoryFilter === 'all') { sourceList = [...safeRecipes, ...singleIngredients]; }
     
     return sourceList.filter(r => {
@@ -517,7 +510,7 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
         </div>
         {showFilters && !showGrid && recipeCategoryFilter !== 'single' && (<div className="p-4 bg-slate-900 border-b border-slate-800 animate-slide-up w-full"><div className="mb-4"><ChipSelector title="基酒篩選 (Base)" options={availableBases} selected={filterBases} onSelect={setFilterBases} /></div><div><ChipSelector title="風味篩選 (Flavor)" options={availableTags} selected={filterTags} onSelect={setFilterTags} /></div><div className="mt-4 flex justify-between items-center text-xs text-slate-500"><span>找到 {filtered.length} 款酒譜</span><button onClick={() => {setFilterBases([]); setFilterTags([]);}} className="text-rose-400 hover:text-rose-300">清除篩選</button></div></div>)}
       </div>
-      {/* FIX 4: Increased padding-bottom to pb-32 */}
+      {/* 修正：加大底部留白防止遮擋 */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
          {showGrid ? (<CategoryGrid categories={gridCategories} onSelect={handleBlockSelect} onAdd={() => setShowCatModal(true)} onDelete={handleDeleteCategory} isEditing={isGridEditing} toggleEditing={() => setIsGridEditing(!isGridEditing)} isConsumerMode={!isOwner} role={userRole} />) : (<div className="p-4 space-y-4 pb-32">{activeBlock && (<div className="flex items-center gap-3 mb-4 animate-fade-in"><button onClick={clearBlockFilter} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-200"><ArrowLeft size={20}/></button><div><div className="text-xs text-slate-500">正在檢視</div><div className="text-xl font-bold text-amber-500">{activeBlock.nameZh}</div></div></div>)}{filtered.length > 0 ? filtered.map(recipe => <RecipeCard key={recipe.id} recipe={recipe} ingredients={ingredients} onClick={setViewingItem} isConsumerMode={isConsumer} role={userRole} />) : <div className="text-center py-10 text-slate-500 flex flex-col items-center"><Filter size={48} className="mb-4 opacity-20"/><p>沒有找到符合條件的酒譜</p>{activeBlock && <button onClick={clearBlockFilter} className="mt-4 text-amber-500 underline">返回分類</button>}</div>}<div className="h-10"></div></div>)}
       </div>
@@ -538,13 +531,14 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
   const isOwner = userRole === 'owner';
   const isConsumer = userRole === 'customer';
 
-  // FIX 4: Cloud sync helpers
+  // 修正：同步至雲端的函數
   const syncToCloud = (newSections) => {
       setSections(newSections);
       const shopId = localStorage.getItem('bar_shop_id');
       if (window.firebase && shopId) {
           const db = window.firebase.firestore();
           const batch = db.batch();
+          // 將每個專區寫入 sections 集合
           newSections.forEach(sec => {
               batch.set(db.collection('shops').doc(shopId).collection('sections').doc(sec.id), sec);
           });
@@ -661,357 +655,6 @@ const InventoryScreen = ({ ingredients, startEdit, requestDelete, ingCategories,
 const QuickCalcScreen = ({ ingredients, availableBases }) => { const [mode, setMode] = useState('single'); const [price, setPrice] = useState(''); const [volume, setVolume] = useState(700); const [targetCostRate, setTargetCostRate] = useState(25); const [draftIngs, setDraftIngs] = useState([]); const [technique, setTechnique] = useState('Stir'); const [showIngPicker, setShowIngPicker] = useState(false); const addDraftIng = (ingId) => { if(!ingId) return; setDraftIngs([...draftIngs, { id: ingId, amount: 30 }]); }; const updateDraftAmount = (idx, val) => { const newIngs = [...draftIngs]; newIngs[idx].amount = val; setDraftIngs(newIngs); }; const removeDraftIng = (idx) => { setDraftIngs(draftIngs.filter((_, i) => i !== idx)); }; const draftStats = useMemo(() => calculateRecipeStats({ ingredients: draftIngs, technique }, ingredients), [draftIngs, technique, ingredients]); const suggestedPrice = draftStats.cost > 0 ? Math.ceil((draftStats.cost / (targetCostRate / 100)) / 10) * 10 : 0; const ingCategories = [ { id: 'alcohol', label: '基酒 Alcohol' }, { id: 'soft', label: '軟性飲料 Soft' }, { id: 'other', label: '其他 Other' } ]; return (<div className="h-full flex flex-col animate-fade-in text-slate-200 w-full bg-slate-950"><div className="shrink-0 bg-slate-950/95 backdrop-blur z-20 border-b border-slate-800 p-4 pt-safe"><h2 className="text-xl font-serif mb-4 mt-4">成本計算工具</h2><div className="flex bg-slate-800 p-1 rounded-xl"><button onClick={() => setMode('single')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all select-none ${mode === 'single' ? 'bg-slate-700 text-white shadow' : 'text-slate-500'}`}>純飲速算 (列表)</button><button onClick={() => setMode('draft')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all select-none ${mode === 'draft' ? 'bg-amber-600 text-white shadow' : 'text-slate-500'}`}>雞尾酒草稿 (Draft)</button></div></div><div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24 custom-scrollbar">{mode === 'single' ? (<div className="space-y-6 animate-fade-in"><div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-4"><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">單瓶成本 ($)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="800" className="w-full p-3 bg-slate-800 rounded-xl border border-slate-700 outline-none focus:border-amber-500 text-white font-mono text-lg" /></div><div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">容量 (ml)</label><input type="number" value={volume} onChange={e => setVolume(e.target.value)} className="w-full p-3 bg-slate-800 rounded-xl border border-slate-700 outline-none focus:border-amber-500 text-white font-mono text-lg" /></div></div><div className="space-y-2 pt-2 border-t border-slate-800"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">目標成本率 (Cost Rate)</label><div className="flex items-center gap-2"><button onClick={() => setTargetCostRate(Math.max(10, targetCostRate - 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">-</button><span className="text-amber-500 font-bold font-mono w-8 text-center">{targetCostRate}%</span><button onClick={() => setTargetCostRate(Math.min(100, targetCostRate + 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">+</button></div></div><input type="range" min="10" max="80" step="1" value={targetCostRate} onChange={e => setTargetCostRate(Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500" /></div></div><div className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-lg shadow-black/20"><table className="w-full text-sm"><thead><tr className="bg-slate-900 border-b border-slate-700"><th className="p-4 text-left font-bold text-slate-400">規格</th><th className="p-4 text-right font-bold text-slate-400">成本</th><th className="p-4 text-right font-bold text-amber-500">建議售價</th></tr></thead><tbody className="divide-y divide-slate-700/50">{[{ label: '1 ml', vol: 1 }, { label: '30 ml (Shot)', vol: 30 }, { label: '50 ml (Single)', vol: 50 }, { label: '60 ml (Double)', vol: 60 }, { label: '整瓶 (Bottle)', vol: safeNumber(volume) || 700 }].map((row, idx) => { const p = safeNumber(price); const v = safeNumber(volume) || 1; const cost = (p / v) * row.vol; const rate = safeNumber(targetCostRate) / 100 || 0.25; const suggested = p > 0 ? Math.ceil((cost / rate) / 10) * 10 : 0; return (<tr key={idx} className="hover:bg-slate-700/30 transition-colors"><td className="p-4 text-slate-200 font-medium">{row.label}{idx === 4 && <span className="block text-[10px] text-slate-500 font-normal">Based on {targetCostRate}% CR</span>}</td><td className="p-4 text-right text-slate-400 font-mono">${cost.toFixed(1)}</td><td className="p-4 text-right"><div className="text-amber-400 font-bold font-mono text-lg">${suggested}</div></td></tr>); })}</tbody></table></div></div>) : (<div className="space-y-4 animate-fade-in"><div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">調製法</label><div className="flex gap-2">{['Shake', 'Stir', 'Build'].map(t => (<button key={t} onClick={()=>setTechnique(t)} className={`flex-1 py-2 rounded-lg text-sm border ${technique===t ? 'bg-slate-700 border-amber-500 text-white' : 'border-slate-700 text-slate-500'}`}>{t}</button>))}</div></div><div className="space-y-3">{draftIngs.map((item, idx) => { const ing = ingredients.find(i => i.id === item.id); return (<div key={idx} className="flex gap-2 items-center animate-slide-up"><div className="flex-1 p-3 bg-slate-800 rounded-xl border border-slate-700 text-sm">{ing?.nameZh}</div><input type="number" value={item.amount} onChange={e => updateDraftAmount(idx, Number(e.target.value))} className="w-20 p-3 bg-slate-800 rounded-xl border border-slate-700 text-center font-mono outline-none focus:border-amber-500"/><button onClick={() => removeDraftIng(idx)} className="p-3 text-rose-500 bg-slate-800 rounded-xl border border-slate-700 hover:bg-rose-900/20"><Trash2 size={18}/></button></div>); })}<button onClick={() => setShowIngPicker(true)} className="w-full p-3 bg-slate-800/50 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-white hover:border-slate-400 transition-colors text-center flex items-center justify-center gap-2"><Plus size={16}/> 加入材料</button></div><div className="space-y-2 pt-4 border-t border-slate-800"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">目標成本率 (Cost Rate)</label><div className="flex items-center gap-2"><button onClick={() => setTargetCostRate(Math.max(10, targetCostRate - 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">-</button><span className="text-amber-500 font-bold font-mono w-8 text-center">{targetCostRate}%</span><button onClick={() => setTargetCostRate(Math.min(100, targetCostRate + 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">+</button></div></div><input type="range" min="10" max="80" step="1" value={targetCostRate} onChange={e => setTargetCostRate(Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500" /></div><div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-700 mt-4 shadow-xl"><div className="grid grid-cols-2 gap-6 mb-4"><div><div className="text-xs text-slate-500 mb-1">總成本</div><div className="text-2xl font-mono text-rose-400 font-bold">${draftStats.cost}</div></div><div className="text-right"><div className="text-xs text-slate-500 mb-1">總容量 (含融水)</div><div className="text-2xl font-mono text-blue-400 font-bold">{draftStats.volume}ml</div></div></div><div className="pt-4 border-t border-slate-700 flex justify-between items-center"><span className="text-slate-400 text-sm">預估酒精濃度</span><span className="text-xl font-bold text-amber-500">{draftStats.finalAbv.toFixed(1)}%</span></div><div className="pt-2 flex justify-between items-center border-t border-slate-700/50 mt-2"><span className="text-slate-400 text-sm">建議售價</span><span className="text-2xl font-bold text-emerald-400 font-mono">${suggestedPrice}</span></div></div></div>)}</div><IngredientPickerModal isOpen={showIngPicker} onClose={() => setShowIngPicker(false)} onSelect={addDraftIng} ingredients={ingredients} categories={ingCategories} availableBases={availableBases}/></div>); };
 
 // ==========================================
-// 4. Overlays (Editor & Viewer)
-// ==========================================
-
-const EditorSheet = ({ mode, item, setItem, onSave, onClose, ingredients, availableTechniques, setAvailableTechniques, availableTags, setAvailableTags, availableGlasses, setAvailableGlasses, availableBases, setAvailableBases, requestDelete, ingCategories, setIngCategories, showAlert }) => {
-  const fileInputRef = useRef(null);
-  const [addingItem, setAddingItem] = useState(null); 
-  const [newItemValue, setNewItemValue] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [showIngPicker, setShowIngPicker] = useState(false);
-  const [pickerTargetIndex, setPickerTargetIndex] = useState(null);
-
-  if (!mode || !item) return null;
-
-  const handleAddItem = () => { if (!newItemValue.trim()) return; const val = newItemValue.trim(); if (addingItem === 'technique') setAvailableTechniques([...availableTechniques, val]); if (addingItem === 'glass') setAvailableGlasses([...availableGlasses, val]); if (addingItem === 'tag') setAvailableTags([...availableTags, val]); if (addingItem === 'base') setAvailableBases([...availableBases, val]); setAddingItem(null); setNewItemValue(''); };
-  const handleImageUpload = (e) => { const file = e.target.files[0]; if (!file) return; if (file.size > 10 * 1024 * 1024) { if(showAlert) showAlert('錯誤', '圖片太大，請選擇小於 10MB 的照片'); else alert('圖片太大'); return; } const reader = new FileReader(); reader.onload = (event) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width; let height = img.height; const MAX_WIDTH = 300; const MAX_HEIGHT = 300; if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); const dataUrl = canvas.toDataURL('image/jpeg', 0.5); setItem({ ...item, image: dataUrl }); }; img.src = event.target.result; }; reader.readAsDataURL(file); };
-  const handleRecipeIngChange = (idx, field, value) => { const newIngs = [...item.ingredients]; newIngs[idx][field] = value; setItem({ ...item, ingredients: newIngs }); };
-  const addRecipeIng = () => { setItem({ ...item, ingredients: [...item.ingredients, { id: '', amount: 0 }] }); };
-  const removeRecipeIng = (idx) => { const newIngs = item.ingredients.filter((_, i) => i !== idx); setItem({ ...item, ingredients: newIngs }); };
-  const toggleTag = (tag) => { const tags = item.tags || []; if (tags.includes(tag)) setItem({ ...item, tags: tags.filter(t => t !== tag) }); else setItem({ ...item, tags: [...tags, tag] }); };
-  const handleSaveWrapper = async () => { setIsSaving(true); try { await onSave(); } finally { setIsSaving(false); } };
-  const stats = mode === 'recipe' ? calculateRecipeStats(item, ingredients) : null;
-  const isSingle = item.type === 'single';
-
-  // --- Auto-Calculation Logic with Fixed Input Handling ---
-  const handleCostRateChange = (valStr) => {
-    if (valStr === '') {
-        const newItem = { ...item, targetCostRate: '' };
-        setItem(newItem);
-        return;
-    }
-    const val = parseFloat(valStr);
-    const newItem = { ...item, targetCostRate: val };
-     
-    if (!isNaN(val)) {
-        if (mode === 'ingredient' && item.addToSingle) {
-            setItem(autoCalcPricesForIngredient(newItem));
-        } else if (mode === 'recipe' && isSingle) {
-            setItem(autoCalcPricesForSingleRecipe(newItem));
-        } else {
-            setItem(newItem);
-        }
-    } else {
-        setItem(newItem);
-    }
-  };
-
-  const autoCalcPricesForIngredient = (currentItem) => {
-    if (!currentItem.addToSingle) return currentItem;
-    const price = safeNumber(currentItem.price);
-    const vol = safeNumber(currentItem.volume);
-    const rate = safeNumber(currentItem.targetCostRate) || 25;
-    if (price <= 0 || vol <= 0 || rate <= 0) return currentItem;
-    const costPerMl = price / vol;
-    const rateDecimal = rate / 100;
-    return { ...currentItem, priceShot: Math.ceil(((costPerMl * 30) / rateDecimal) / 5) * 5, priceGlass: Math.ceil(((costPerMl * 50) / rateDecimal) / 5) * 5, priceBottle: Math.ceil(((price / rateDecimal) / 10) * 10) };
-  };
-  const autoCalcPricesForSingleRecipe = (currentItem) => {
-    if (currentItem.type !== 'single') return currentItem;
-    const price = safeNumber(currentItem.bottleCost);
-    const vol = safeNumber(currentItem.bottleCapacity);
-    const rate = safeNumber(currentItem.targetCostRate) || 25;
-    if (price <= 0 || vol <= 0 || rate <= 0) return currentItem;
-    const costPerMl = price / vol;
-    const rateDecimal = rate / 100;
-    return { ...currentItem, priceShot: Math.ceil(((costPerMl * 30) / rateDecimal) / 5) * 5, priceGlass: Math.ceil(((costPerMl * 50) / rateDecimal) / 5) * 5, priceBottle: Math.ceil(((price / rateDecimal) / 10) * 10) };
-  };
-  const handlePickerSelect = (id) => { if (pickerTargetIndex !== null) { handleRecipeIngChange(pickerTargetIndex, 'id', id); } setPickerTargetIndex(null); };
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full md:w-[600px] bg-slate-900 h-full shadow-2xl flex flex-col animate-slide-up border-l border-slate-800">
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900 z-10 pt-safe"><button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition"><X size={24}/></button><h2 className="text-lg font-bold text-white font-serif">{mode === 'recipe' ? '編輯酒譜' : '編輯材料'}</h2><button onClick={handleSaveWrapper} disabled={isSaving} className="p-2 text-amber-500 hover:text-amber-400 bg-amber-900/20 rounded-full hover:bg-amber-900/40 transition disabled:opacity-50">{isSaving ? <RefreshCcw className="animate-spin" size={24} /> : <Check size={24}/>}</button></div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-safe-offset custom-scrollbar">
-           <div className="space-y-2"><input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" /><div onClick={() => fileInputRef.current?.click()} className="w-full h-48 bg-slate-800 rounded-2xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center relative overflow-hidden group cursor-pointer transition-colors hover:border-slate-500 active:scale-[0.99]">{item.image ? (<>{item.image.startsWith('data:') ? (<img src={item.image} className="w-full h-full object-cover" alt="Preview" />) : (<AsyncImage imageId={item.image} className="w-full h-full object-cover" />)}<div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-white text-sm font-bold flex items-center gap-2"><Camera size={18}/> 更換照片</span></div></>) : (<div className="text-slate-500 flex flex-col items-center"><div className="p-4 bg-slate-700/50 rounded-full mb-2"><Camera size={32} /></div><span className="text-xs font-bold">點擊拍照或上傳</span></div>)}</div></div>
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1 col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">中文名稱</label><input value={item.nameZh} onChange={e => setItem({...item, nameZh: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none" placeholder="例如: 內格羅尼" /></div>
-              <div className="space-y-1 col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">英文名稱</label><input value={item.nameEn} onChange={e => setItem({...item, nameEn: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none" placeholder="e.g. Negroni" /></div>
-              <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">分類</label><select value={item.type} onChange={e => setItem({...item, type: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 appearance-none">{mode === 'recipe' ? (<><option value="classic">經典 Classic</option><option value="signature">特調 Signature</option><option value="single">單品/純飲 Single</option></>) : (ingCategories.map(c => <option key={c.id} value={c.id}>{c.label}</option>))}</select></div>
-              {mode === 'ingredient' && item.type === 'alcohol' && (<div className="space-y-1"><div className="flex justify-between"><label className="text-xs font-bold text-slate-500 uppercase">基酒細項</label><button onClick={() => { setAddingItem('base'); setNewItemValue(''); }} className="text-[10px] text-amber-500">新增</button></div>{addingItem === 'base' ? (<div className="flex gap-2 h-[46px] items-center"><input autoFocus value={newItemValue} onChange={e=>setNewItemValue(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white" placeholder="輸入新基酒..."/><button onClick={handleAddItem} className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">V</button><button onClick={()=>setAddingItem(null)} className="text-slate-400 p-1"><X size={14}/></button></div>) : (<select value={item.subType} onChange={e => setItem({...item, subType: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 appearance-none"><option value="">-- 無 --</option>{availableBases.map(s => <option key={s} value={s}>{s}</option>)}</select>)}</div>)}
-              {mode === 'recipe' && !isSingle && (<div className="space-y-1"><div className="flex justify-between"><label className="text-xs font-bold text-slate-500 uppercase">基酒</label><button onClick={() => { setAddingItem('base'); setNewItemValue(''); }} className="text-[10px] text-amber-500">新增</button></div>{addingItem === 'base' ? (<div className="flex gap-2 h-[46px] items-center"><input autoFocus value={newItemValue} onChange={e=>setNewItemValue(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white" placeholder="輸入新基酒..."/><button onClick={handleAddItem} className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">V</button><button onClick={()=>setAddingItem(null)} className="text-slate-400 p-1"><X size={14}/></button></div>) : (<select value={item.baseSpirit} onChange={e => setItem({...item, baseSpirit: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 appearance-none"><option value="">其他</option>{availableBases.map(b => <option key={b} value={b}>{b}</option>)}</select>)}</div>)}
-           </div>
-           
-           {/* 材料庫編輯模式 */}
-           {mode === 'ingredient' && (
-             <div className="space-y-4">
-                 <div className="grid grid-cols-2 gap-4 bg-slate-800/50 p-4 rounded-xl border border-slate-800">
-                    {/* 加入 autoCalcPricesForIngredient 觸發 */}
-                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">價格 ($)</label><input type="number" value={item.price} onChange={e => setItem(autoCalcPricesForIngredient({...item, price: Number(e.target.value)}))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none font-mono" /></div>
-                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">容量 (ml)</label><input type="number" value={item.volume} onChange={e => setItem(autoCalcPricesForIngredient({...item, volume: Number(e.target.value)}))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none font-mono" /></div>
-                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">酒精度 (%)</label><input type="number" value={item.abv} onChange={e => setItem({...item, abv: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none font-mono" /></div>
-                 </div>
-                 
-                 {/* 加入單品設定 */}
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-800 space-y-4">
-                    <div className="flex items-center justify-between">
-                       <label className="text-sm font-bold text-slate-200 flex items-center gap-2"><Beer size={16} className="text-amber-500"/> 顯示於單品酒單</label>
-                       <button onClick={() => {
-                          const newState = !item.addToSingle;
-                          if (newState) {
-                             setItem(autoCalcPricesForIngredient({...item, addToSingle: newState, targetCostRate: item.targetCostRate || 25}));
-                          } else {
-                             setItem({...item, addToSingle: newState});
-                          }
-                       }} className={`w-12 h-6 rounded-full transition-colors flex items-center px-1 ${item.addToSingle ? 'bg-amber-600 justify-end' : 'bg-slate-700 justify-start'}`}>
-                          <div className="w-4 h-4 rounded-full bg-white shadow-sm"></div>
-                       </button>
-                    </div>
-                    {item.addToSingle && (
-                       <div className="space-y-4 animate-slide-up">
-                          <div className="flex justify-between items-center bg-slate-900 p-2 rounded-lg border border-slate-700">
-                             <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><Percent size={12}/> 目標成本率</label>
-                             <div className="flex items-center gap-2">
-                                <input type="number" value={item.targetCostRate} onChange={e => handleCostRateChange(e.target.value)} className="w-12 text-center bg-transparent text-amber-500 font-mono font-bold outline-none border-b border-slate-700 focus:border-amber-500"/>
-                                <span className="text-xs text-slate-500">%</span>
-                             </div>
-                          </div>
-                          
-                          <div className="space-y-3">
-                             <div className="flex items-center gap-3"><label className="text-xs text-slate-400 w-24">Shot (30ml)</label><input type="number" value={item.priceShot || ''} onChange={e => setItem({...item, priceShot: e.target.value})} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono outline-none focus:border-amber-500" placeholder="自訂售價" /></div>
-                             <div className="flex items-center gap-3"><label className="text-xs text-slate-400 w-24">單杯 (50ml)</label><input type="number" value={item.priceGlass || ''} onChange={e => setItem({...item, priceGlass: e.target.value})} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono outline-none focus:border-amber-500" placeholder="自訂售價" /></div>
-                             <div className="flex items-center gap-3"><label className="text-xs text-slate-400 w-24">整瓶 Bottle</label><input type="number" value={item.priceBottle || ''} onChange={e => setItem({...item, priceBottle: e.target.value})} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono outline-none focus:border-amber-500" placeholder="自訂售價" /></div>
-                          </div>
-                       </div>
-                    )}
-                 </div>
-             </div>
-           )}
-           
-           {/* 酒譜編輯模式 */}
-           {mode === 'recipe' && (
-             <div className="space-y-6">
-                 {/* 單品酒譜編輯 (Recipe Single) */}
-                 {isSingle ? (
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 space-y-4">
-                    <h3 className="text-amber-500 font-bold text-sm flex items-center gap-2"><DollarSign size={16}/> 單品成本設定</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                       <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">進貨價格 ($)</label><input type="number" value={item.bottleCost} onChange={e => setItem(autoCalcPricesForSingleRecipe({...item, bottleCost: e.target.value}))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none font-mono" placeholder="2000" /></div>
-                       <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">瓶身容量 (ml)</label><input type="number" value={item.bottleCapacity} onChange={e => setItem(autoCalcPricesForSingleRecipe({...item, bottleCapacity: e.target.value}))} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none font-mono" placeholder="700" /></div>
-                    </div>
-                    <div className="pt-2 border-t border-slate-800"></div>
-                    <div className="flex justify-between items-center mb-2">
-                       <h3 className="text-amber-500 font-bold text-sm flex items-center gap-2"><Calculator size={16}/> 自訂售價</h3>
-                       <div className="flex items-center gap-2 bg-slate-900 px-2 py-1 rounded-lg border border-slate-700">
-                          <span className="text-[10px] text-slate-400">Target CR:</span>
-                          <input type="number" value={item.targetCostRate} onChange={e => handleCostRateChange(e.target.value)} className="w-8 bg-transparent text-xs text-amber-500 font-bold text-center outline-none"/>
-                          <span className="text-[10px] text-slate-500">%</span>
-                       </div>
-                    </div>
-                    <div className="space-y-3">
-                       <div className="flex items-center gap-3"><label className="text-xs text-slate-400 w-24">Shot (30ml)</label><input type="number" value={item.priceShot} onChange={e => setItem({...item, priceShot: e.target.value})} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono outline-none focus:border-amber-500" placeholder="自動計算..." /></div>
-                       <div className="flex items-center gap-3"><label className="text-xs text-slate-400 w-24">單杯 (50ml)</label><input type="number" value={item.priceGlass} onChange={e => setItem({...item, priceGlass: e.target.value})} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono outline-none focus:border-amber-500" placeholder="自動計算..." /></div>
-                       <div className="flex items-center gap-3"><label className="text-xs text-slate-400 w-24">整瓶 Bottle</label><input type="number" value={item.priceBottle} onChange={e => setItem({...item, priceBottle: e.target.value})} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono outline-none focus:border-amber-500" placeholder="自動計算..." /></div>
-                    </div>
-                 </div>
-                 ) : (
-                 <div className="space-y-2">
-                    <div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">酒譜材料</label><button onClick={addRecipeIng} className="text-amber-500 text-xs font-bold flex items-center gap-1 hover:text-amber-400"><Plus size={14}/> 新增材料</button></div>
-                    <div className="space-y-2">
-                       {item.ingredients && item.ingredients.map((ingItem, idx) => (
-                          <div key={idx} className="flex gap-2 items-center animate-slide-up">
-                             {/* 替換原本的 Select 為 Button 觸發 Modal */}
-                             <button 
-                                onClick={() => { setPickerTargetIndex(idx); setShowIngPicker(true); }}
-                                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-white text-left truncate hover:border-amber-500 transition-colors"
-                             >
-                                {ingredients.find(i => i.id === ingItem.id)?.nameZh || <span className="text-slate-500">選擇材料...</span>}
-                             </button>
-                             <input type="number" value={ingItem.amount} onChange={e => handleRecipeIngChange(idx, 'amount', Number(e.target.value))} className="w-20 bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-center text-white outline-none focus:border-amber-500 font-mono" placeholder="ml"/>
-                             <button onClick={() => removeRecipeIng(idx)} className="p-3 text-slate-600 hover:text-rose-500"><Trash2 size={18}/></button>
-                          </div>
-                       ))}
-                    </div>
-                 </div>
-                 )}
-                 {!isSingle && (<div className="bg-slate-800 rounded-xl p-4 border border-slate-700 grid grid-cols-2 gap-4"><div><div className="text-xs text-slate-500">總成本</div><div className="text-xl font-mono text-rose-400 font-bold">${stats.cost}</div></div><div><div className="text-xs text-slate-500">成本率</div><div className={`text-xl font-mono font-bold ${stats.costRate > 30 ? 'text-rose-400' : 'text-emerald-400'}`}>{stats.costRate.toFixed(0)}%</div></div><div><div className="text-xs text-slate-500">預估 ABV</div><div className="text-xl font-mono text-blue-400 font-bold">{stats.finalAbv.toFixed(1)}%</div></div><div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase block">售價</label><input type="number" value={item.price || ''} onChange={e => setItem({...item, price: Number(e.target.value)})} placeholder={`建議: $${Math.ceil((stats.cost / 0.3) / 10) * 10}`} className="w-full bg-slate-900 border border-slate-600 rounded p-1 text-sm text-amber-500 font-bold text-right outline-none focus:border-amber-500"/></div></div>)}
-                 {!isSingle && (<div className="grid grid-cols-2 gap-4"><div className="space-y-1"><div className="flex justify-between"><label className="text-xs font-bold text-slate-500 uppercase">調製法</label><button onClick={() => { setAddingItem('technique'); setNewItemValue(''); }} className="text-[10px] text-amber-500">新增</button></div>{addingItem === 'technique' ? (<div className="flex gap-2 h-[46px] items-center"><input autoFocus value={newItemValue} onChange={e=>setNewItemValue(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white" placeholder="輸入調法..."/><button onClick={handleAddItem} className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">V</button><button onClick={()=>setAddingItem(null)} className="text-slate-400 p-1"><X size={14}/></button></div>) : (<select value={item.technique} onChange={e => setItem({...item, technique: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 appearance-none">{availableTechniques.map(t => <option key={t} value={t}>{t}</option>)}</select>)}</div><div className="space-y-1"><div className="flex justify-between"><label className="text-xs font-bold text-slate-500 uppercase">杯具</label><button onClick={() => { setAddingItem('glass'); setNewItemValue(''); }} className="text-[10px] text-amber-500">新增</button></div>{addingItem === 'glass' ? (<div className="flex gap-2 h-[46px] items-center"><input autoFocus value={newItemValue} onChange={e=>setNewItemValue(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white" placeholder="輸入杯具..."/><button onClick={handleAddItem} className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">V</button><button onClick={()=>setAddingItem(null)} className="text-slate-400 p-1"><X size={14}/></button></div>) : (<select value={item.glass} onChange={e => setItem({...item, glass: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 appearance-none">{availableGlasses.map(g => <option key={g} value={g}>{g}</option>)}</select>)}</div><div className="space-y-1 col-span-2"><label className="text-xs font-bold text-slate-500 uppercase">裝飾 (Garnish)</label><input value={item.garnish || ''} onChange={e => setItem({...item, garnish: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500" placeholder="e.g. Orange Peel" /></div></div>)}
-                 <div className="space-y-2"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">風味標籤</label><button onClick={() => { setAddingItem('tag'); setNewItemValue(''); }} className="text-xs text-amber-500">新增</button></div>{addingItem === 'tag' && (<div className="flex gap-2 items-center mb-2 animate-slide-up"><input autoFocus value={newItemValue} onChange={e=>setNewItemValue(e.target.value)} className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-white" placeholder="輸入新標籤..."/><button onClick={handleAddItem} className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold">新增</button><button onClick={()=>setAddingItem(null)} className="text-slate-400 p-1"><X size={14}/></button></div>)}<div className="flex flex-wrap gap-2">{availableTags.map(tag => (<button key={tag} onClick={() => toggleTag(tag)} className={`px-3 py-1.5 rounded-full text-xs transition-all border ${item.tags?.includes(tag) ? 'bg-amber-600 text-white border-amber-600' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{tag}</button>))}</div></div>
-                 <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">步驟 / 備註</label><textarea value={item.steps} onChange={e => setItem({...item, steps: e.target.value})} className="w-full h-24 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 resize-none" placeholder="輸入製作步驟..." /></div>
-                 <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">風味描述</label><textarea value={item.flavorDescription} onChange={e => setItem({...item, flavorDescription: e.target.value})} className="w-full h-16 bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 resize-none" placeholder="簡短描述風味..." /></div>
-             </div>
-           )}
-           <div className="pt-6 border-t border-slate-800"><button onClick={() => { if (requestDelete) requestDelete(item.id, mode); onClose(); }} className="w-full py-3 rounded-xl border border-rose-900/50 text-rose-500 hover:bg-rose-900/20 font-bold transition-colors flex items-center justify-center gap-2"><Trash2 size={18}/> 刪除此項目</button></div>
-        </div>
-      </div>
-
-      {/* Ingredient Picker Modal */}
-      <IngredientPickerModal 
-         isOpen={showIngPicker} 
-         onClose={() => setShowIngPicker(false)} 
-         onSelect={handlePickerSelect}
-         ingredients={ingredients}
-         categories={ingCategories}
-         availableBases={availableBases}
-      />
-    </div>
-  );
-};
-
-// ... (其余部分保持不变) ...
-// (ViewerOverlay, MainAppContent, App)
-const ViewerOverlay = ({ item, onClose, ingredients, startEdit, requestDelete, isConsumerMode }) => {
-  if (!item) return null;
-  const stats = calculateRecipeStats(item, ingredients);
-  const isSingle = item.type === 'single' || item.isIngredient;
-
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-       <div className="relative w-full md:w-[600px] bg-slate-950 h-full shadow-2xl flex flex-col animate-slide-up overflow-hidden">
-          
-          {/* Hero Image */}
-          <div className="relative h-72 shrink-0">
-             <AsyncImage 
-               imageId={item.image}
-               alt={item.nameZh}
-               className="w-full h-full object-cover"
-             />
-             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent"></div>
-             
-             {/* FIX: Corrected positioning classes for the back button */}
-             <button 
-               onClick={onClose} 
-               className="absolute top-4 left-4 z-50 p-2 bg-black/30 backdrop-blur rounded-full text-white hover:bg-white/20 transition shadow-lg mt-safe"
-             >
-                <ChevronLeft size={24}/>
-             </button>
-
-             <div className="absolute bottom-0 left-0 p-6 w-full">
-                <div className="flex gap-2 mb-2">
-                   {isSingle ? <span className="text-[10px] text-purple-200 bg-purple-900/40 px-1.5 py-0.5 rounded border border-purple-800/50">Single 單品</span> : item.baseSpirit && <span className="text-[10px] text-blue-200 bg-blue-900/40 px-1.5 py-0.5 rounded border border-blue-800/50">{item.baseSpirit}</span>}
-                   {!isSingle && <span className="text-[10px] text-amber-200 bg-amber-900/40 px-1.5 py-0.5 rounded border border-amber-800/50">{item.technique}</span>}
-                </div>
-                <h1 className="text-3xl font-serif font-bold text-white mb-1">{item.nameZh}</h1>
-                <p className="text-slate-300 font-medium text-lg opacity-90">{item.nameEn}</p>
-             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950">
-             <div className="p-6 space-y-8 pb-8">
-                {/* Stats Row */}
-                {!isSingle && (
-                <div className="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800/50 backdrop-blur-sm">
-                   <div className="text-center">
-                      <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">酒精濃度</div>
-                      <div className="text-xl font-bold text-amber-500">{stats.finalAbv.toFixed(1)}%</div>
-                   </div>
-                   {!isConsumerMode && (
-                     <>
-                       <div className="w-px h-8 bg-slate-800"></div>
-                       <div className="text-center">
-                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">成本率</div>
-                          <div className={`text-xl font-bold ${stats.costRate > 30 ? 'text-rose-400' : 'text-emerald-400'}`}>{stats.costRate.toFixed(0)}%</div>
-                       </div>
-                     </>
-                   )}
-                   <div className="w-px h-8 bg-slate-800"></div>
-                   <div className="text-center">
-                      <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">售價</div>
-                      <div className="text-xl font-bold text-slate-200 font-mono">${item.price || stats.price}</div>
-                   </div>
-                </div>
-                )}
-
-                {/* Single Cost Table (New) */}
-                {isSingle && !isConsumerMode && <PricingTable recipe={item} />}
-
-                {/* Consumer Mode Single Price Display */}
-                {isSingle && isConsumerMode && (
-                    <div className="grid grid-cols-3 gap-2 w-full text-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800/50">
-                        {item.priceShot && <div className="p-2 border border-slate-700 rounded-lg"><div className="text-[10px] text-slate-400">Shot</div><div className="text-amber-400 font-bold">${item.priceShot}</div></div>}
-                        {item.priceGlass && <div className="p-2 border border-amber-500/30 rounded-lg shadow-sm shadow-amber-500/10"><div className="text-[10px] text-amber-500 font-bold">Glass</div><div className="text-amber-400 font-bold text-lg">${item.priceGlass}</div></div>}
-                        {item.priceBottle && <div className="p-2 border border-slate-700 rounded-lg"><div className="text-[10px] text-slate-400">Bottle</div><div className="text-amber-400 font-bold">${item.priceBottle}</div></div>}
-                    </div>
-                )}
-
-                {/* Ingredients */}
-                {!isSingle && (
-                <div>
-                   <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><Layers size={16}/> 材料</h3>
-                   <div className="space-y-3">
-                      {item.ingredients.map((ingItem, idx) => {
-                         const ing = ingredients.find(i => i.id === ingItem.id);
-                         return (
-                            <div key={idx} className="flex justify-between items-center py-2 border-b border-slate-800/50">
-                               <div className="flex-1">
-                                  <span className="text-slate-200 font-medium">{ing?.nameZh || '未知材料'}</span>
-                                  {/* ABV Display - Only show in Admin Mode */}
-                                  {!isConsumerMode && <span className="text-[10px] text-slate-500 font-mono ml-2">({ing?.abv || 0}%)</span>}
-                               </div>
-                               {!isConsumerMode && <span className="text-amber-500 font-mono font-bold">{ingItem.amount}ml</span>}
-                            </div>
-                         );
-                      })}
-                      {item.garnish && (
-                         <div className="flex justify-between items-center py-2 border-b border-slate-800/50">
-                            <span className="text-slate-400 italic">Garnish: {item.garnish}</span>
-                         </div>
-                      )}
-                   </div>
-                </div>
-                )}
-
-                {/* Steps */}
-                <div>
-                   <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">{isConsumerMode ? <BookOpen size={16}/> : <ListPlus size={16}/>} {isConsumerMode ? '介紹' : '步驟/備註'}</h3>
-                   <div className="text-slate-300 leading-relaxed whitespace-pre-line bg-slate-900/30 p-4 rounded-xl border border-slate-800/50">
-                      {item.steps || '無描述'}
-                   </div>
-                </div>
-
-                {/* Flavor & Tags */}
-                <div className="space-y-4">
-                   {item.flavorDescription && (
-                     <div className="bg-gradient-to-br from-amber-900/10 to-transparent p-4 rounded-xl border border-amber-500/10 relative">
-                        <Quote className="absolute top-2 left-2 text-amber-500/20" size={24}/>
-                        <p className="text-amber-200/80 italic text-center relative z-10 text-sm">"{item.flavorDescription}"</p>
-                     </div>
-                   )}
-                   
-                   <div className="flex flex-wrap gap-2">
-                      {item.tags?.map(tag => (
-                         <span key={tag} className="text-xs text-slate-500 bg-slate-900 border border-slate-800 px-3 py-1 rounded-full">#{tag}</span>
-                      ))}
-                   </div>
-                </div>
-             </div>
-          </div>
-
-          {/* Footer Actions - Fixed at bottom */}
-          <div className="p-4 border-t border-slate-800 bg-slate-950 pb-safe z-20 flex gap-3 shrink-0">
-             <button 
-               onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent((item.nameZh || '') + ' ' + (item.nameEn || '') + ' 調酒')}`, '_blank')}
-               className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors flex items-center justify-center border border-slate-700"
-               title="Google 搜尋"
-             >
-                <Globe size={20} />
-             </button>
-             {!isConsumerMode && <button 
-               onClick={() => startEdit(item.isIngredient ? 'ingredient' : 'recipe', item)} 
-               className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-amber-900/20 transition-all active:scale-95"
-             >
-               編輯酒譜
-             </button>}
-          </div>
-       </div>
-    </div>
-  );
-};
-
-// ==========================================
 // 5. Login Screen (New Feature)
 // ==========================================
 
@@ -1030,7 +673,7 @@ const LoginScreen = ({ onLogin }) => {
        // First check local storage for convenience
        const localPwd = localStorage.getItem('bar_admin_password');
        if (localPwd && password === localPwd) {
-           // Allow login if local matches (assuming it was set by valid owner previously)
+           // Allow login if local matches
        } else if (window.firebase) {
            // If no local match, check cloud
            try {
@@ -1054,7 +697,6 @@ const LoginScreen = ({ onLogin }) => {
                }
            } catch (e) {
                console.error("Auth error:", e);
-               // Fallback: allow if offline/error but warn? For now, proceed to allow offline usage
            }
        }
     }
