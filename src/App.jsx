@@ -1068,10 +1068,10 @@ const LoginScreen = ({ onLogin }) => {
        const localPwd = localStorage.getItem('bar_admin_password');
        if (localPwd && password === localPwd) {
            // Allow login if local matches (assuming it was set by valid owner previously)
-       } else if (window.firebase) {
-           // If no local match, check cloud
-           try {
-               const db = window.firebase.firestore();
+          } else if (window.firebase && typeof window.firebase.firestore === 'function') {
+            // If no local match, check cloud
+            try {
+                const db = window.firebase.firestore();
                const settingsDoc = await db.collection('shops').doc(shopId).collection('settings').doc('config').get();
                
                if (settingsDoc.exists) {
@@ -1172,6 +1172,7 @@ function MainAppContent() {
   const [recipes, setRecipes] = useState([]);
   const [sections, setSections] = useState([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [firebaseReady, setFirebaseReady] = useState(false); // 新增這行：追蹤 Firebase 是否完全載入
    
   // Local Settings
   const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem('bar_admin_password') || '');
@@ -1212,8 +1213,11 @@ function MainAppContent() {
     document.body.appendChild(script);
      
     // Load Firebase
-    loadFirebase().then(() => console.log("Firebase Loaded")).catch(err => console.error("Firebase Error", err));
-     
+    loadFirebase().then(() => {
+      console.log("Firebase Loaded");
+      setFirebaseReady(true); // 新增這行：通知系統 Firebase 已經好了
+  }).catch(err => console.error("Firebase Error", err));
+
     // Check local session
     const savedShop = localStorage.getItem('bar_shop_id');
     const savedRole = localStorage.getItem('bar_user_role');
@@ -1227,452 +1231,463 @@ function MainAppContent() {
     window.addEventListener('offline', () => setIsOnline(false));
   }, []);
 
-  // Sync Logic
-  useEffect(() => {
-     if (isLoggedIn && shopId && window.firebase) {
-        const db = window.firebase.firestore();
-        const unsubIng = db.collection('shops').doc(shopId).collection('ingredients').onSnapshot(snap => {
-           const list = snap.docs.map(d => d.data());
-           setIngredients(list);
-           localStorage.setItem('bar_ingredients_v3', JSON.stringify(list)); 
-        });
-        const unsubRec = db.collection('shops').doc(shopId).collection('recipes').onSnapshot(snap => {
-           const list = snap.docs.map(d => d.data());
-           setRecipes(list);
-           localStorage.setItem('bar_recipes_v3', JSON.stringify(list));
-        });
-        const unsubSec = db.collection('shops').doc(shopId).collection('sections').onSnapshot(snap => {
-           const list = snap.docs.map(d => d.data());
-           setSections(list);
-           localStorage.setItem('bar_sections_v3', JSON.stringify(list));
-        });
-        return () => { unsubIng(); unsubRec(); unsubSec(); };
-     } else {
-        // Offline Fallback
-        try {
-            const i = localStorage.getItem('bar_ingredients_v3'); if(i) setIngredients(JSON.parse(i));
-            const r = localStorage.getItem('bar_recipes_v3'); if(r) setRecipes(JSON.parse(r));
-            const s = localStorage.getItem('bar_sections_v3'); if(s) setSections(JSON.parse(s));
-        } catch(e) {}
-     }
-  }, [shopId, isLoggedIn]);
+// Sync Logic
+useEffect(() => {
+  // 修改：加入 firebaseReady 的判斷，確保資料庫模組已載入
+  if (isLoggedIn && shopId && window.firebase && firebaseReady) {
+     
+     const db = window.firebase.firestore();
 
-  const handleLogin = (sid, role) => {
-      setShopId(sid);
-      setUserRole(role);
-      setIsLoggedIn(true);
-      localStorage.setItem('bar_shop_id', sid);
-      localStorage.setItem('bar_user_role', role);
-  };
+     // --- 資料庫監聽邏輯 ---
+     const unsubIng = db.collection('shops').doc(shopId).collection('ingredients').onSnapshot(snap => {
+        const list = snap.docs.map(d => d.data());
+        setIngredients(list);
+        localStorage.setItem('bar_ingredients_v3', JSON.stringify(list)); 
+     });
 
-  const handleLogout = () => {
-      setIsLoggedIn(false);
-      localStorage.removeItem('bar_user_role');
-      setShopId('');
-      setIngredients([]);
-      setRecipes([]);
-  };
+     const unsubRec = db.collection('shops').doc(shopId).collection('recipes').onSnapshot(snap => {
+        const list = snap.docs.map(d => d.data());
+        setRecipes(list);
+        localStorage.setItem('bar_recipes_v3', JSON.stringify(list));
+     });
 
-  const closeDialog = () => setDialog({ ...dialog, isOpen: false });
-  const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
-  const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
+     const unsubSec = db.collection('shops').doc(shopId).collection('sections').onSnapshot(snap => {
+        const list = snap.docs.map(d => d.data());
+        setSections(list);
+        localStorage.setItem('bar_sections_v3', JSON.stringify(list));
+     });
 
-  // Mode Switching (Simulated for this version)
-  const handleUnlockRequest = () => { setShowPasswordModal(true); setPasswordInput(''); };
-  const handleUnlockConfirm = () => {
-      if (passwordInput === adminPassword) {
-          setUserRole('owner'); // Upgrade to owner
-          setShowPasswordModal(false);
-      } else { alert("密碼錯誤"); }
-  };
-  
-  // FIX: Save password to Cloud when setting it
-  const handleSetPassword = async () => {
-      setAdminPassword(newPasswordInput);
-      localStorage.setItem('bar_admin_password', newPasswordInput);
-      
-      if (window.firebase && shopId) {
-          try {
-              await window.firebase.firestore().collection('shops').doc(shopId).collection('settings').doc('config').set({ adminPassword: newPasswordInput }, { merge: true });
-          } catch(e) { console.error("Cloud pwd save error", e); }
-      }
-      
-      setIsSettingPassword(false);
-      setNewPasswordInput('');
-      showAlert('成功', '管理員密碼已更新 (雲端同步)');
-  };
+     // 清除監聽
+     return () => { unsubIng(); unsubRec(); unsubSec(); };
 
-  // --- RESTORED DATA FEATURES ---
-  
-  const handleExportJSON = () => {
-      const data = { ingredients, recipes, sections, version: '13.0' };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bar_manager_backup_${shopId}_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-  };
+  } else {
+     // Offline Fallback (離線備案)
+     try {
+         const i = localStorage.getItem('bar_ingredients_v3'); if(i) setIngredients(JSON.parse(i));
+         const r = localStorage.getItem('bar_recipes_v3'); if(r) setRecipes(JSON.parse(r));
+         const s = localStorage.getItem('bar_sections_v3'); if(s) setSections(JSON.parse(s));
+     } catch(e) {}
+  }
+}, [shopId, isLoggedIn, firebaseReady]);
 
-  const handleImportJSON = (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-          try {
-              const data = JSON.parse(e.target.result);
-              if (window.firebase && confirm('確定要還原備份嗎？這將覆蓋雲端現有資料。')) {
-                 const db = window.firebase.firestore();
-                 const batch = db.batch();
-                 
-                 // Restore Ingredients
-                 if (data.ingredients) {
-                     data.ingredients.forEach(i => {
-                         batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(i.id), i);
-                     });
-                 }
-                 // Restore Recipes
-                 if (data.recipes) {
-                     data.recipes.forEach(r => {
-                         batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(r.id), r);
-                     });
-                 }
-                 await batch.commit();
-                 showAlert('還原成功', '資料已從備份檔還原');
-              }
-          } catch (err) {
-              showAlert('錯誤', '無效的備份檔案');
-          }
-      };
-      reader.readAsText(file);
-  };
-  
-  const handleResetSystem = () => {
-      if (prompt('警告：此操作將刪除所有雲端資料且無法復原。\n請輸入 "RESET" 確認重置：') === 'RESET') {
-          if (window.firebase) {
+const handleLogin = (sid, role) => {
+   setShopId(sid);
+   setUserRole(role);
+   setIsLoggedIn(true);
+   localStorage.setItem('bar_shop_id', sid);
+   localStorage.setItem('bar_user_role', role);
+};
+
+const handleLogout = () => {
+   setIsLoggedIn(false);
+   localStorage.removeItem('bar_user_role');
+   setShopId('');
+   setIngredients([]);
+   setRecipes([]);
+};
+
+const closeDialog = () => setDialog({ ...dialog, isOpen: false });
+const showConfirm = (title, message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', title, message, onConfirm });
+const showAlert = (title, message) => setDialog({ isOpen: true, type: 'alert', title, message, onConfirm: null });
+
+// Mode Switching
+const handleUnlockRequest = () => { setShowPasswordModal(true); setPasswordInput(''); };
+const handleUnlockConfirm = () => {
+   if (passwordInput === adminPassword) {
+       setUserRole('owner'); // Upgrade to owner
+       setShowPasswordModal(false);
+   } else { alert("密碼錯誤"); }
+};
+
+// FIX: Save password to Cloud when setting it
+const handleSetPassword = async () => {
+   setAdminPassword(newPasswordInput);
+   localStorage.setItem('bar_admin_password', newPasswordInput);
+   
+   if (window.firebase && shopId) {
+       try {
+           await window.firebase.firestore().collection('shops').doc(shopId).collection('settings').doc('config').set({ adminPassword: newPasswordInput }, { merge: true });
+       } catch(e) { console.error("Cloud pwd save error", e); }
+   }
+   
+   setIsSettingPassword(false);
+   setNewPasswordInput('');
+   showAlert('成功', '管理員密碼已更新 (雲端同步)');
+};
+
+// --- DATA MANAGEMENT FEATURES ---
+
+const handleExportJSON = () => {
+   const data = { ingredients, recipes, sections, version: '13.0' };
+   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+   const url = URL.createObjectURL(blob);
+   const a = document.createElement('a');
+   a.href = url;
+   a.download = `bar_manager_backup_${shopId}_${new Date().toISOString().split('T')[0]}.json`;
+   a.click();
+   URL.revokeObjectURL(url);
+};
+
+const handleImportJSON = (event) => {
+   const file = event.target.files[0];
+   if (!file) return;
+   const reader = new FileReader();
+   reader.onload = async (e) => {
+       try {
+           const data = JSON.parse(e.target.result);
+           if (window.firebase && confirm('確定要還原備份嗎？這將覆蓋雲端現有資料。')) {
               const db = window.firebase.firestore();
-              ingredients.forEach(i => db.collection('shops').doc(shopId).collection('ingredients').doc(i.id).delete());
-              recipes.forEach(r => db.collection('shops').doc(shopId).collection('recipes').doc(r.id).delete());
-              showAlert('重置完成', '系統資料已清空');
-          }
-      }
-  };
+              const batch = db.batch();
+              
+              // Restore Ingredients
+              if (data.ingredients) {
+                  data.ingredients.forEach(i => {
+                      batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(i.id), i);
+                  });
+              }
+              // Restore Recipes
+              if (data.recipes) {
+                  data.recipes.forEach(r => {
+                      batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(r.id), r);
+                  });
+              }
+              await batch.commit();
+              showAlert('還原成功', '資料已從備份檔還原');
+           }
+       } catch (err) {
+           showAlert('錯誤', '無效的備份檔案');
+       }
+   };
+   reader.readAsText(file);
+};
 
-  const handleExcelExport = () => {
-     if (!window.XLSX) return alert("Excel 套件尚未載入");
-     const wb = window.XLSX.utils.book_new();
-     
-     // Ingredients Sheet
-     const ingData = ingredients.map(i => ({
-         ID: i.id, NameZh: i.nameZh, NameEn: i.nameEn, Type: i.type, SubType: i.subType, Price: i.price, Volume: i.volume, ABV: i.abv, AddToSingle: i.addToSingle ? 'Yes' : 'No'
-     }));
-     const wsIng = window.XLSX.utils.json_to_sheet(ingData);
-     window.XLSX.utils.book_append_sheet(wb, wsIng, "Ingredients");
-     
-     // Recipes Sheet
-     const recData = recipes.map(r => ({
-         ID: r.id, NameZh: r.nameZh, NameEn: r.nameEn, Type: r.type, Price: r.price, Base: r.baseSpirit
-     }));
-     const wsRec = window.XLSX.utils.json_to_sheet(recData);
-     window.XLSX.utils.book_append_sheet(wb, wsRec, "Recipes");
-     
-     window.XLSX.writeFile(wb, `bar_data_${shopId}.xlsx`);
-  };
-
-  const handleExcelImport = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!window.XLSX) return alert("Excel 套件尚未載入");
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = window.XLSX.read(data, {type: 'array'});
-        
-        if (window.firebase) {
-            const db = window.firebase.firestore();
-            const batch = db.batch();
-            
-            // Parse Ingredients
-            if (workbook.Sheets['Ingredients']) {
-                const rawIngs = window.XLSX.utils.sheet_to_json(workbook.Sheets['Ingredients']);
-                rawIngs.forEach(row => {
-                    const item = {
-                        id: row.ID || generateId(),
-                        nameZh: row.NameZh,
-                        nameEn: row.NameEn || '',
-                        type: row.Type || 'other',
-                        subType: row.SubType || '',
-                        price: row.Price || 0,
-                        volume: row.Volume || 700,
-                        abv: row.ABV || 0,
-                        unit: 'ml',
-                        addToSingle: row.AddToSingle === 'Yes'
-                    };
-                    batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(item.id), item);
-                });
-            }
-            
-            // Parse Recipes (Simplified)
-            if (workbook.Sheets['Recipes']) {
-                const rawRecs = window.XLSX.utils.sheet_to_json(workbook.Sheets['Recipes']);
-                rawRecs.forEach(row => {
-                      const item = {
-                        id: row.ID || generateId(),
-                        nameZh: row.NameZh,
-                        nameEn: row.NameEn || '',
-                        type: row.Type || 'classic',
-                        price: row.Price || 0,
-                        baseSpirit: row.Base || '',
-                        ingredients: [], 
-                        tags: []
-                      };
-                      batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(item.id), item);
-                });
-            }
-
-            await batch.commit();
-            showAlert('成功', 'Excel 資料已匯入雲端');
-        }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const handleBatchAddIngredients = async (newItems) => {
-    if(window.firebase) {
-        const db = window.firebase.firestore();
-        const batch = db.batch();
-        newItems.forEach(item => {
-            const ref = db.collection('shops').doc(shopId).collection('ingredients').doc(item.id);
-            batch.set(ref, item);
-        });
-        await batch.commit();
-        showAlert('同步成功', `已上傳 ${newItems.length} 項材料`);
-    }
-  };
-
-  const requestDelete = async (id, type) => {
-    if (userRole !== 'owner') return;
-    showConfirm('刪除確認', '確定要刪除嗎？', async () => {
+const handleResetSystem = () => {
+   if (prompt('警告：此操作將刪除所有雲端資料且無法復原。\n請輸入 "RESET" 確認重置：') === 'RESET') {
        if (window.firebase) {
            const db = window.firebase.firestore();
-           const collectionName = type === 'recipe' ? 'recipes' : 'ingredients';
-           await db.collection('shops').doc(shopId).collection(collectionName).doc(id).delete();
+           ingredients.forEach(i => db.collection('shops').doc(shopId).collection('ingredients').doc(i.id).delete());
+           recipes.forEach(r => db.collection('shops').doc(shopId).collection('recipes').doc(r.id).delete());
+           showAlert('重置完成', '系統資料已清空');
        }
-    });
-  };
+   }
+};
 
-  // Standard save item with cloud support
-  const saveItem = async (item, mode) => {
-      const db = window.firebase.firestore();
-      const col = mode === 'recipe' ? 'recipes' : 'ingredients';
-      
-      // Image compression before upload
-      if (item.image && item.image.startsWith('data:')) {
-          item.image = await compressImage(item.image);
-          await ImageDB.save(item.id, item.image); // Cache local
-      }
+const handleExcelExport = () => {
+  if (!window.XLSX) return alert("Excel 套件尚未載入");
+  const wb = window.XLSX.utils.book_new();
+  
+  // Ingredients Sheet
+  const ingData = ingredients.map(i => ({
+      ID: i.id, NameZh: i.nameZh, NameEn: i.nameEn, Type: i.type, SubType: i.subType, Price: i.price, Volume: i.volume, ABV: i.abv, AddToSingle: i.addToSingle ? 'Yes' : 'No'
+  }));
+  const wsIng = window.XLSX.utils.json_to_sheet(ingData);
+  window.XLSX.utils.book_append_sheet(wb, wsIng, "Ingredients");
+  
+  // Recipes Sheet
+  const recData = recipes.map(r => ({
+      ID: r.id, NameZh: r.nameZh, NameEn: r.nameEn, Type: r.type, Price: r.price, Base: r.baseSpirit
+  }));
+  const wsRec = window.XLSX.utils.json_to_sheet(recData);
+  window.XLSX.utils.book_append_sheet(wb, wsRec, "Recipes");
+  
+  window.XLSX.writeFile(wb, `bar_data_${shopId}.xlsx`);
+};
 
-      await db.collection('shops').doc(shopId).collection(col).doc(item.id).set(item);
-      setEditorMode(null);
-  };
+const handleExcelImport = (e) => {
+ const file = e.target.files[0];
+ if (!file) return;
+ if (!window.XLSX) return alert("Excel 套件尚未載入");
+ const reader = new FileReader();
+ reader.onload = async (e) => {
+     const data = new Uint8Array(e.target.result);
+     const workbook = window.XLSX.read(data, {type: 'array'});
+     
+     if (window.firebase) {
+         const db = window.firebase.firestore();
+         const batch = db.batch();
+         
+         // Parse Ingredients
+         if (workbook.Sheets['Ingredients']) {
+             const rawIngs = window.XLSX.utils.sheet_to_json(workbook.Sheets['Ingredients']);
+             rawIngs.forEach(row => {
+                 const item = {
+                     id: row.ID || generateId(),
+                     nameZh: row.NameZh,
+                     nameEn: row.NameEn || '',
+                     type: row.Type || 'other',
+                     subType: row.SubType || '',
+                     price: row.Price || 0,
+                     volume: row.Volume || 700,
+                     abv: row.ABV || 0,
+                     unit: 'ml',
+                     addToSingle: row.AddToSingle === 'Yes'
+                 };
+                 batch.set(db.collection('shops').doc(shopId).collection('ingredients').doc(item.id), item);
+             });
+         }
+         
+         // Parse Recipes (Simplified)
+         if (workbook.Sheets['Recipes']) {
+             const rawRecs = window.XLSX.utils.sheet_to_json(workbook.Sheets['Recipes']);
+             rawRecs.forEach(row => {
+                   const item = {
+                     id: row.ID || generateId(),
+                     nameZh: row.NameZh,
+                     nameEn: row.NameEn || '',
+                     type: row.Type || 'classic',
+                     price: row.Price || 0,
+                     baseSpirit: row.Base || '',
+                     ingredients: [], 
+                     tags: []
+                   };
+                   batch.set(db.collection('shops').doc(shopId).collection('recipes').doc(item.id), item);
+             });
+         }
 
-  const startEdit = (mode, item) => {
-      setEditorMode(mode);
-      setEditingItem(item || { id: generateId(), nameZh: '', ingredients: [], type: 'classic', targetCostRate: '' });
-  };
+         await batch.commit();
+         showAlert('成功', 'Excel 資料已匯入雲端');
+     }
+ };
+ reader.readAsArrayBuffer(file);
+};
 
-  if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
+const handleBatchAddIngredients = async (newItems) => {
+ if(window.firebase) {
+     const db = window.firebase.firestore();
+     const batch = db.batch();
+     newItems.forEach(item => {
+         const ref = db.collection('shops').doc(shopId).collection('ingredients').doc(item.id);
+         batch.set(ref, item);
+     });
+     await batch.commit();
+     showAlert('同步成功', `已上傳 ${newItems.length} 項材料`);
+ }
+};
 
-  // Permissions
-  const canEdit = userRole === 'owner';
-  const showCost = userRole === 'owner';
-  const showInventory = userRole === 'owner' || userRole === 'staff';
+const requestDelete = async (id, type) => {
+ if (userRole !== 'owner') return;
+ showConfirm('刪除確認', '確定要刪除嗎？', async () => {
+    if (window.firebase) {
+        const db = window.firebase.firestore();
+        const collectionName = type === 'recipe' ? 'recipes' : 'ingredients';
+        await db.collection('shops').doc(shopId).collection(collectionName).doc(id).delete();
+    }
+ });
+};
 
-  return (
-    <div className="fixed inset-0 bg-slate-950 text-slate-200 font-sans flex flex-col w-full">
-      <style>{`:root{color-scheme:dark}.pt-safe{padding-top:env(safe-area-inset-top)}.pb-safe{padding-bottom:env(safe-area-inset-bottom)}.custom-scrollbar::-webkit-scrollbar{width:4px;background:#1e293b}.custom-scrollbar::-webkit-scrollbar-thumb{background:#475569;border-radius:2px}`}</style>
-      
-      <main className="flex-1 relative overflow-hidden w-full">
-        {activeTab === 'recipes' && (
-          <RecipeListScreen 
-            recipes={recipes} 
-            ingredients={ingredients} 
-            searchTerm={searchTerm} 
-            setSearchTerm={setSearchTerm} 
-            recipeCategoryFilter={recipeCategoryFilter} 
-            setRecipeCategoryFilter={setRecipeCategoryFilter} 
-            startEdit={startEdit} 
-            setViewingItem={setViewingItem} 
-            availableTags={availableTags} 
-            availableBases={availableBases}
-            isConsumerMode={!canEdit} // Reusing this prop for UI layout
-            userRole={userRole}
-            onUnlock={handleUnlockRequest}
-          />
-        )}
-        
-        {activeTab === 'featured' && (
-           <FeaturedSectionScreen 
-             sections={sections} 
-             setSections={setSections} 
-             recipes={recipes} 
-             setViewingItem={setViewingItem} 
-             ingredients={ingredients}
-             showConfirm={showConfirm}
-             isConsumerMode={!canEdit}
-             userRole={userRole}
-             onUnlock={handleUnlockRequest}
-           />
-        )}
+// Standard save item with cloud support
+const saveItem = async (item, mode) => {
+   const db = window.firebase.firestore();
+   const col = mode === 'recipe' ? 'recipes' : 'ingredients';
+   
+   // Image compression before upload
+   if (item.image && item.image.startsWith('data:')) {
+       item.image = await compressImage(item.image);
+       await ImageDB.save(item.id, item.image); // Cache local
+   }
 
-        {activeTab === 'ingredients' && showInventory && (
-          <InventoryScreen 
-            ingredients={ingredients} 
-            startEdit={startEdit} 
-            requestDelete={requestDelete} 
-            ingCategories={ingCategories} 
-            setIngCategories={setIngCategories} 
-            showConfirm={showConfirm} 
-            onBatchAdd={handleBatchAddIngredients} 
-            availableBases={availableBases}
-          />
-        )}
-        {activeTab === 'quick' && canEdit && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
-        
-        {activeTab === 'tools' && (
-           <div className="h-full flex flex-col overflow-y-auto p-6 space-y-6 pt-20 custom-scrollbar pb-32">
-             <div className="text-center">
-                 <h2 className="text-xl font-serif text-white">Bar Manager Cloud</h2>
-                 <p className="text-xs text-slate-500">Shop ID: {shopId}</p>
-             </div>
-             
-             {canEdit && (
-             <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
-                 <h3 className="text-sm font-bold text-white flex gap-2 items-center"><KeyRound size={16}/> 管理員密碼</h3>
-                 {isSettingPassword ? (
-                    <div className="flex gap-2">
-                        <input value={newPasswordInput} onChange={e=>setNewPasswordInput(e.target.value)} className="bg-slate-800 border border-slate-600 rounded px-2 py-1 flex-1 text-sm"/>
-                        <button onClick={handleSetPassword} className="bg-amber-600 text-white px-3 rounded text-xs">儲存</button>
-                    </div>
-                 ) : <button onClick={()=>setIsSettingPassword(true)} className="text-xs text-amber-500">修改密碼</button>}
-             </div>
-             )}
-             
-             {/* RESTORED DATA MANAGEMENT UI (Only for Owner) */}
-             {canEdit && (
-             <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
-                 <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Database size={16}/> 資料庫管理</h3>
-                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={handleExportJSON} className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300">
-                        <Download size={20} className="mb-1 text-amber-500"/>
-                        <span className="text-xs">備份 (JSON)</span>
-                    </button>
-                    <label className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300 cursor-pointer">
-                        <Upload size={20} className="mb-1 text-blue-500"/>
-                        <span className="text-xs">還原 (JSON)</span>
-                        <input type="file" hidden accept=".json" onChange={handleImportJSON}/>
-                    </label>
-                    <button onClick={handleExcelExport} className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300">
-                        <FileSpreadsheet size={20} className="mb-1 text-emerald-500"/>
-                        <span className="text-xs">匯出 Excel</span>
-                    </button>
-                    <label className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300 cursor-pointer">
-                        <FilePlus size={20} className="mb-1 text-emerald-500"/>
-                        <span className="text-xs">匯入 Excel</span>
-                        <input type="file" hidden accept=".xlsx" onChange={handleExcelImport}/>
-                    </label>
-                 </div>
-                 <button onClick={handleResetSystem} className="w-full py-3 border border-rose-900/50 text-rose-500 rounded-xl hover:bg-rose-900/20 text-xs font-bold flex items-center justify-center gap-2">
-                    <RefreshCcw size={14}/> 重置系統 (危險)
-                 </button>
-             </div>
-             )}
-             
-             {/* CUSTOMER MODE TOGGLE (Only for Owner) */}
-             {canEdit && (
-             <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
-                 <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Users size={16}/> 訪客模式</h3>
-                 <button onClick={() => setUserRole('customer')} className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2">
-                    <Lock size={16}/> 鎖定為顧客模式
-                 </button>
-             </div>
-             )}
+   await db.collection('shops').doc(shopId).collection(col).doc(item.id).set(item);
+   setEditorMode(null);
+};
 
-             <div className="space-y-3">
-                 <button onClick={handleLogout} className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2"><LogOut size={18}/> 登出 / 切換商店</button>
-             </div>
-           </div>
-        )}
-      </main>
+const startEdit = (mode, item) => {
+   setEditorMode(mode);
+   setEditingItem(item || { id: generateId(), nameZh: '', ingredients: [], type: 'classic', targetCostRate: '' });
+};
 
-      {/* Overlays */}
-      {showPasswordModal && (
-          <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6">
-              <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6">
-                  <h3 className="text-xl font-bold text-white mb-4 text-center">管理員解鎖</h3>
-                  <input type="password" autoFocus value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-center text-white mb-4"/>
-                  <div className="flex gap-3"><button onClick={()=>setShowPasswordModal(false)} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl">取消</button><button onClick={handleUnlockConfirm} className="flex-1 py-3 bg-amber-600 text-white rounded-xl">確認</button></div>
-              </div>
+if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
+
+// Permissions
+const canEdit = userRole === 'owner';
+const showCost = userRole === 'owner';
+const showInventory = userRole === 'owner' || userRole === 'staff';
+
+return (
+ <div className="fixed inset-0 bg-slate-950 text-slate-200 font-sans flex flex-col w-full">
+   <style>{`:root{color-scheme:dark}.pt-safe{padding-top:env(safe-area-inset-top)}.pb-safe{padding-bottom:env(safe-area-inset-bottom)}.custom-scrollbar::-webkit-scrollbar{width:4px;background:#1e293b}.custom-scrollbar::-webkit-scrollbar-thumb{background:#475569;border-radius:2px}`}</style>
+   
+   <main className="flex-1 relative overflow-hidden w-full">
+     {activeTab === 'recipes' && (
+       <RecipeListScreen 
+         recipes={recipes} 
+         ingredients={ingredients} 
+         searchTerm={searchTerm} 
+         setSearchTerm={setSearchTerm} 
+         recipeCategoryFilter={recipeCategoryFilter} 
+         setRecipeCategoryFilter={setRecipeCategoryFilter} 
+         startEdit={startEdit} 
+         setViewingItem={setViewingItem} 
+         availableTags={availableTags} 
+         availableBases={availableBases}
+         isConsumerMode={!canEdit}
+         userRole={userRole}
+         onUnlock={handleUnlockRequest}
+       />
+     )}
+     
+     {activeTab === 'featured' && (
+        <FeaturedSectionScreen 
+          sections={sections} 
+          setSections={setSections} 
+          recipes={recipes} 
+          setViewingItem={setViewingItem} 
+          ingredients={ingredients}
+          showConfirm={showConfirm}
+          isConsumerMode={!canEdit}
+          userRole={userRole}
+          onUnlock={handleUnlockRequest}
+        />
+     )}
+
+     {activeTab === 'ingredients' && showInventory && (
+       <InventoryScreen 
+         ingredients={ingredients} 
+         startEdit={startEdit} 
+         requestDelete={requestDelete} 
+         ingCategories={ingCategories} 
+         setIngCategories={setIngCategories} 
+         showConfirm={showConfirm} 
+         onBatchAdd={handleBatchAddIngredients} 
+         availableBases={availableBases}
+       />
+     )}
+     {activeTab === 'quick' && canEdit && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
+     
+     {activeTab === 'tools' && (
+        <div className="h-full flex flex-col overflow-y-auto p-6 space-y-6 pt-20 custom-scrollbar pb-32">
+          <div className="text-center">
+              <h2 className="text-xl font-serif text-white">Bar Manager Cloud</h2>
+              <p className="text-xs text-slate-500">Shop ID: {shopId}</p>
           </div>
-      )}
+          
+          {canEdit && (
+          <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
+              <h3 className="text-sm font-bold text-white flex gap-2 items-center"><KeyRound size={16}/> 管理員密碼</h3>
+              {isSettingPassword ? (
+                 <div className="flex gap-2">
+                     <input value={newPasswordInput} onChange={e=>setNewPasswordInput(e.target.value)} className="bg-slate-800 border border-slate-600 rounded px-2 py-1 flex-1 text-sm"/>
+                     <button onClick={handleSetPassword} className="bg-amber-600 text-white px-3 rounded text-xs">儲存</button>
+                 </div>
+              ) : <button onClick={()=>setIsSettingPassword(true)} className="text-xs text-amber-500">修改密碼</button>}
+          </div>
+          )}
+          
+          {/* RESTORED DATA MANAGEMENT UI */}
+          {canEdit && (
+          <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
+              <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Database size={16}/> 資料庫管理</h3>
+              <div className="grid grid-cols-2 gap-3">
+                 <button onClick={handleExportJSON} className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300">
+                     <Download size={20} className="mb-1 text-amber-500"/>
+                     <span className="text-xs">備份 (JSON)</span>
+                 </button>
+                 <label className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300 cursor-pointer">
+                     <Upload size={20} className="mb-1 text-blue-500"/>
+                     <span className="text-xs">還原 (JSON)</span>
+                     <input type="file" hidden accept=".json" onChange={handleImportJSON}/>
+                 </label>
+                 <button onClick={handleExcelExport} className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300">
+                     <FileSpreadsheet size={20} className="mb-1 text-emerald-500"/>
+                     <span className="text-xs">匯出 Excel</span>
+                 </button>
+                 <label className="flex flex-col items-center justify-center p-3 bg-slate-800 rounded-xl border border-slate-700 hover:bg-slate-700 text-slate-300 cursor-pointer">
+                     <FilePlus size={20} className="mb-1 text-emerald-500"/>
+                     <span className="text-xs">匯入 Excel</span>
+                     <input type="file" hidden accept=".xlsx" onChange={handleExcelImport}/>
+                 </label>
+              </div>
+              <button onClick={handleResetSystem} className="w-full py-3 border border-rose-900/50 text-rose-500 rounded-xl hover:bg-rose-900/20 text-xs font-bold flex items-center justify-center gap-2">
+                 <RefreshCcw size={14}/> 重置系統 (危險)
+              </button>
+          </div>
+          )}
+          
+          {/* CUSTOMER MODE TOGGLE */}
+          {canEdit && (
+          <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
+              <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Users size={16}/> 訪客模式</h3>
+              <button onClick={() => setUserRole('customer')} className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2">
+                 <Lock size={16}/> 鎖定為顧客模式
+              </button>
+          </div>
+          )}
 
-      {dialog.isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6 text-center">
-             <h3 className="text-xl font-bold text-white mb-2">{dialog.title}</h3>
-             <p className="text-slate-400 text-sm mb-4">{dialog.message}</p>
-             <div className="flex gap-2">
-                 {dialog.type === 'confirm' && <button onClick={closeDialog} className="flex-1 py-3 bg-slate-800 rounded-xl text-slate-400">取消</button>}
-                 <button onClick={()=>{if(dialog.onConfirm)dialog.onConfirm();closeDialog();}} className="flex-1 py-3 bg-amber-600 rounded-xl text-white">確認</button>
-             </div>
+          <div className="space-y-3">
+              <button onClick={handleLogout} className="w-full py-4 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2"><LogOut size={18}/> 登出 / 切換商店</button>
           </div>
         </div>
-      )}
+     )}
+   </main>
 
-<nav className="shrink-0 bg-slate-950 border-t border-slate-800 pb-safe pt-2 z-30 w-full flex justify-around items-center">         {[
-           { id: 'recipes', icon: Beer, l: '酒單' },
-           { id: 'featured', icon: Star, l: '專區' }, 
-           showInventory && { id: 'ingredients', icon: GlassWater, l: '材料' },
-           canEdit && { id: 'quick', icon: Calculator, l: '速算' },
-           { id: 'tools', icon: Settings, l: '設定' }
-         ].filter(Boolean).map(t => (
-           <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`flex flex-col items-center gap-1 ${activeTab===t.id ? 'text-amber-500' : 'text-slate-500'}`}>
-             <t.icon size={22} />
-             <span className="text-[10px] font-bold">{t.l}</span>
-           </button>
-         ))}
-      </nav>
+   {/* Overlays */}
+   {showPasswordModal && (
+       <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6">
+           <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6">
+               <h3 className="text-xl font-bold text-white mb-4 text-center">管理員解鎖</h3>
+               <input type="password" autoFocus value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-center text-white mb-4"/>
+               <div className="flex gap-3"><button onClick={()=>setShowPasswordModal(false)} className="flex-1 py-3 bg-slate-800 text-slate-400 rounded-xl">取消</button><button onClick={handleUnlockConfirm} className="flex-1 py-3 bg-amber-600 text-white rounded-xl">確認</button></div>
+           </div>
+       </div>
+   )}
 
-      <EditorSheet 
-        mode={editorMode} 
-        item={editingItem} 
-        setItem={setEditingItem} 
-        onSave={()=>saveItem(editingItem, editorMode)} 
-        onClose={() => setEditorMode(null)} 
-        ingredients={ingredients} 
-        availableTechniques={availableTechniques} 
-        setAvailableTechniques={setAvailableTechniques} 
-        availableTags={availableTags} 
-        setAvailableTags={setAvailableTags} 
-        availableGlasses={availableGlasses} 
-        setAvailableGlasses={setAvailableGlasses} 
-        availableBases={availableBases}
-        setAvailableBases={setAvailableBases}
-        requestDelete={requestDelete} 
-        ingCategories={ingCategories} 
-        setIngCategories={setIngCategories} 
-        showAlert={showAlert} 
-      />
-      <ViewerOverlay item={viewingItem} onClose={() => setViewingItem(null)} ingredients={ingredients} startEdit={(m, i) => startEdit(m, i)} isConsumerMode={!canEdit} />
-    </div>
-  );
+   {dialog.isOpen && (
+     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70">
+       <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6 text-center">
+          <h3 className="text-xl font-bold text-white mb-2">{dialog.title}</h3>
+          <p className="text-slate-400 text-sm mb-4">{dialog.message}</p>
+          <div className="flex gap-2">
+              {dialog.type === 'confirm' && <button onClick={closeDialog} className="flex-1 py-3 bg-slate-800 rounded-xl text-slate-400">取消</button>}
+              <button onClick={()=>{if(dialog.onConfirm)dialog.onConfirm();closeDialog();}} className="flex-1 py-3 bg-amber-600 rounded-xl text-white">確認</button>
+          </div>
+       </div>
+     </div>
+   )}
+
+   {/* 修正：移除 h-16，加入 pt-2，圖示不凸出 */}
+   <nav className="shrink-0 bg-slate-950 border-t border-slate-800 pb-safe pt-2 z-30 w-full flex justify-around items-center">
+      {[
+        { id: 'recipes', icon: Beer, l: '酒單' },
+        { id: 'featured', icon: Star, l: '專區' }, 
+        showInventory && { id: 'ingredients', icon: GlassWater, l: '材料' },
+        canEdit && { id: 'quick', icon: Calculator, l: '速算' },
+        { id: 'tools', icon: Settings, l: '設定' }
+      ].filter(Boolean).map(t => (
+        <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`flex flex-col items-center gap-1 ${activeTab===t.id ? 'text-amber-500' : 'text-slate-500'}`}>
+          <t.icon size={22} />
+          <span className="text-[10px] font-bold">{t.l}</span>
+        </button>
+      ))}
+   </nav>
+
+   <EditorSheet 
+     mode={editorMode} 
+     item={editingItem} 
+     setItem={setEditingItem} 
+     onSave={()=>saveItem(editingItem, editorMode)} 
+     onClose={() => setEditorMode(null)} 
+     ingredients={ingredients} 
+     availableTechniques={availableTechniques} 
+     setAvailableTechniques={setAvailableTechniques} 
+     availableTags={availableTags} 
+     setAvailableTags={setAvailableTags} 
+     availableGlasses={availableGlasses} 
+     setAvailableGlasses={setAvailableGlasses} 
+     availableBases={availableBases}
+     setAvailableBases={setAvailableBases}
+     requestDelete={requestDelete} 
+     ingCategories={ingCategories} 
+     setIngCategories={setIngCategories} 
+     showAlert={showAlert} 
+   />
+   <ViewerOverlay item={viewingItem} onClose={() => setViewingItem(null)} ingredients={ingredients} startEdit={(m, i) => startEdit(m, i)} isConsumerMode={!canEdit} />
+ </div>
+);
 }
 
 const App = () => (
-  <ErrorBoundary>
-    <MainAppContent />
-  </ErrorBoundary>
+<ErrorBoundary>
+ <MainAppContent />
+</ErrorBoundary>
 );
 
 export default App;
