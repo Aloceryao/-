@@ -1630,8 +1630,7 @@ function MainAppContent() {
         </div>
       )}
 
-      <nav className="shrink-0 bg-slate-950 border-t border-slate-800 pb-safe z-30 w-full flex justify-around h-16 items-center">
-         {[
+<nav className="shrink-0 bg-slate-950 border-t border-slate-800 pb-safe pt-2 z-30 w-full flex justify-around items-center">         {[
            { id: 'recipes', icon: Beer, l: '酒單' },
            { id: 'featured', icon: Star, l: '專區' }, 
            showInventory && { id: 'ingredients', icon: GlassWater, l: '材料' },
