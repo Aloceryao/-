@@ -493,8 +493,8 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
   }, [recipes, ingredients, recipeCategoryFilter, searchTerm, filterBases, filterTags, activeBlock, availableBases]);
 
   const isConsumer = userRole === 'customer';
-  // 店長或資深員工可以編輯分類
-  const canEditGrid = userRole === 'owner' || userRole === 'manager';
+  // 權限判斷：店長或資深員工可以編輯
+  const canEdit = userRole === 'owner' || userRole === 'manager';
 
   return (
     <div className="h-full flex flex-col w-full bg-slate-950">
@@ -507,7 +507,8 @@ const RecipeListScreen = ({ recipes, ingredients, searchTerm, setSearchTerm, rec
            {isConsumer ? (
              <button onClick={onUnlock} className="p-2 rounded-xl border border-slate-800 text-slate-500 hover:text-white bg-slate-900"><Lock size={20}/></button>
            ) : (
-             <button onClick={() => startEdit('recipe')} className="bg-amber-600 hover:bg-amber-500 text-white p-2 rounded-xl shadow-lg active:scale-95 transition-all"><Plus size={20} /></button>
+             // 只有擁有編輯權限的人才看得到新增按鈕
+             canEdit && <button onClick={() => startEdit('recipe')} className="bg-amber-600 hover:bg-amber-500 text-white p-2 rounded-xl shadow-lg active:scale-95 transition-all"><Plus size={20} /></button>
            )}
         </div>
         <div className="grid grid-cols-2 gap-2 px-4 pb-2 border-b border-slate-800/50 w-full">
@@ -535,10 +536,9 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
   const [pickingForSubgroupId, setPickingForSubgroupId] = useState(null); 
   const [pickerSearch, setPickerSearch] = useState(''); 
   
-  const isOwner = userRole === 'owner';
-  const isManager = userRole === 'manager';
-  const canEdit = isOwner || isManager;
   const isConsumer = userRole === 'customer';
+  // 權限：店長或資深員工
+  const canEdit = userRole === 'owner' || userRole === 'manager';
 
   const syncToCloud = (newSections) => {
       setSections(newSections);
@@ -658,7 +658,8 @@ const FeaturedSectionScreen = ({ sections, setSections, recipes, setViewingItem,
   ); 
 };
 
-const InventoryScreen = ({ ingredients, startEdit, requestDelete, ingCategories, setIngCategories, showConfirm, onBatchAdd, availableBases }) => { 
+// 修正：加入 isReadOnly 參數，控制員工是否可編輯
+const InventoryScreen = ({ ingredients, startEdit, requestDelete, ingCategories, setIngCategories, showConfirm, onBatchAdd, availableBases, isReadOnly }) => { 
   const [categoryFilter, setCategoryFilter] = useState('all'); 
   const [isAddingCat, setIsAddingCat] = useState(false); 
   const [newCatName, setNewCatName] = useState(''); 
@@ -677,7 +678,34 @@ const InventoryScreen = ({ ingredients, startEdit, requestDelete, ingCategories,
     return ingredients.filter(i => { if (categoryFilter !== 'all' && i.type !== categoryFilter) return false; if (categoryFilter === 'alcohol' && subCategoryFilter !== 'all') { return i.subType === subCategoryFilter; } return true; }); 
   }, [ingredients, categoryFilter, subCategoryFilter]); 
   
-  return (<div className="h-full flex flex-col w-full bg-slate-950"><div className="shrink-0 bg-slate-950/95 backdrop-blur z-20 border-b border-slate-800 shadow-md px-4 pt-safe pb-0"><div className="flex justify-between items-center mb-4 mt-4"><h2 className="text-2xl font-serif text-slate-100">材料庫</h2><div className="flex gap-2"><button onClick={() => setShowBatchModal(true)} className="flex items-center gap-2 bg-slate-800 text-slate-400 px-3 py-2 rounded-full border border-slate-700 text-sm hover:bg-slate-700 hover:text-white transition-colors" title="批次新增"><FilePlus size={16} /> <span className="hidden sm:inline">批次</span></button><button onClick={() => startEdit('ingredient')} className="flex items-center gap-2 bg-slate-800 text-slate-200 px-4 py-2 rounded-full border border-slate-700 text-sm hover:bg-slate-700 hover:border-amber-500/50 transition-colors"><Plus size={16} /> 新增</button></div></div><div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar w-full"><button onClick={() => setCategoryFilter('all')} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all select-none ${categoryFilter === 'all' ? 'bg-amber-600 text-white shadow' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>全部</button>{ingCategories.map(cat => (<div key={cat.id} className="relative group"><button onClick={() => setCategoryFilter(cat.id)} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all pr-4 select-none ${categoryFilter === cat.id ? 'bg-slate-700 text-white border border-amber-500/50 shadow' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{cat.label}</button>{!['alcohol', 'soft', 'other'].includes(cat.id) && (<button onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }} className="absolute -top-1 -right-1 bg-rose-600 text-white rounded-full p-0.5 w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[8px]"><X size={8} strokeWidth={4}/></button>)}</div>))}{isAddingCat ? (<div className="flex items-center bg-slate-800 rounded-full px-2 py-1 border border-slate-600 animate-fade-in"><input autoFocus className="bg-transparent text-xs text-white w-16 outline-none" placeholder="分類名稱" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} onBlur={() => { if(!newCatName) setIsAddingCat(false); }} /><button onClick={handleAddCategory} className="text-amber-500 ml-1"><Check size={14}/></button></div>) : (<button onClick={() => setIsAddingCat(true)} className="p-1.5 bg-slate-800 rounded-full text-slate-500 hover:text-white hover:bg-slate-700"><Plus size={14}/></button>)}</div>{categoryFilter === 'alcohol' && (<div className="flex items-center gap-2 overflow-x-auto pb-2 mt-2 no-scrollbar w-full animate-slide-up"><span className="text-[10px] text-slate-500 font-bold shrink-0 uppercase tracking-wider pl-1">細項:</span><button onClick={()=>setSubCategoryFilter('all')} className={`whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium transition-colors border ${subCategoryFilter === 'all' ? 'bg-slate-700 border-slate-600 text-white' : 'border-transparent text-slate-500'}`}>全部</button>{availableBases.map(spirit => (<button key={spirit} onClick={()=>setSubCategoryFilter(spirit)} className={`whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium transition-colors border ${subCategoryFilter === spirit ? 'bg-slate-700 border-slate-600 text-white' : 'border-transparent text-slate-500'}`}>{safeString(spirit).split(' ')[0]}</button>))}</div>)}</div><div className="flex-1 overflow-y-auto p-4 space-y-2 pb-32 custom-scrollbar">{filteredIngredients.map(ing => <IngredientRow key={ing.id} ing={ing} onClick={() => startEdit('ingredient', ing)} onDelete={(id) => requestDelete(id, 'ingredient')} />)}{filteredIngredients.length === 0 && <div className="text-center py-10 text-slate-500 flex flex-col items-center"><Layers size={40} className="mb-2 opacity-20"/><span>此分類無材料</span></div>}</div>{showBatchModal && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"><div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl p-6 animate-scale-in flex flex-col max-h-[80vh]"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-white flex items-center gap-2"><FilePlus size={20}/> 批次新增材料</h3><button onClick={() => setShowBatchModal(false)} className="text-slate-400 hover:text-white"><X size={24}/></button></div><p className="text-xs text-slate-400 mb-2">請輸入材料名稱，一行一個。新增後預設價格為 $0，可稍後再編輯。</p><textarea value={batchText} onChange={e => setBatchText(e.target.value)} placeholder={`例如:\n金巴利\n甜香艾酒\n蘇打水`} className="flex-1 bg-slate-800 border border-slate-600 rounded-xl p-3 text-slate-200 focus:border-amber-500 outline-none resize-none mb-4 h-48" autoFocus /><div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase block mb-1">預設分類</label><div className="flex gap-2">{ingCategories.slice(0, 3).map(cat => (<button key={cat.id} onClick={() => setBatchCategory(cat.id)} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${batchCategory === cat.id ? 'bg-slate-700 border-amber-500 text-white' : 'border-slate-700 text-slate-500'}`}>{cat.label}</button>))}</div></div><button onClick={handleBatchSubmit} disabled={!batchText.trim()} className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm shadow-lg shadow-amber-900/20">確認新增 {batchText.split('\n').filter(l => l.trim()).length > 0 ? `(${batchText.split('\n').filter(l => l.trim()).length} 筆)` : ''}</button></div></div>)}</div>); };
+  return (
+    <div className="h-full flex flex-col w-full bg-slate-950">
+        <div className="shrink-0 bg-slate-950/95 backdrop-blur z-20 border-b border-slate-800 shadow-md px-4 pt-safe pb-0">
+            <div className="flex justify-between items-center mb-4 mt-4">
+                <h2 className="text-2xl font-serif text-slate-100">材料庫</h2>
+                {/* 權限控制：只有非唯讀模式 (isReadOnly=false) 才顯示新增按鈕 */}
+                {!isReadOnly && (
+                <div className="flex gap-2">
+                    <button onClick={() => setShowBatchModal(true)} className="flex items-center gap-2 bg-slate-800 text-slate-400 px-3 py-2 rounded-full border border-slate-700 text-sm hover:bg-slate-700 hover:text-white transition-colors" title="批次新增"><FilePlus size={16} /> <span className="hidden sm:inline">批次</span></button>
+                    <button onClick={() => startEdit('ingredient')} className="flex items-center gap-2 bg-slate-800 text-slate-200 px-4 py-2 rounded-full border border-slate-700 text-sm hover:bg-slate-700 hover:border-amber-500/50 transition-colors"><Plus size={16} /> 新增</button>
+                </div>
+                )}
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar w-full">
+                <button onClick={() => setCategoryFilter('all')} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all select-none ${categoryFilter === 'all' ? 'bg-amber-600 text-white shadow' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>全部</button>
+                {ingCategories.map(cat => (<div key={cat.id} className="relative group"><button onClick={() => setCategoryFilter(cat.id)} className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all pr-4 select-none ${categoryFilter === cat.id ? 'bg-slate-700 text-white border border-amber-500/50 shadow' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>{cat.label}</button>{!isReadOnly && !['alcohol', 'soft', 'other'].includes(cat.id) && (<button onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }} className="absolute -top-1 -right-1 bg-rose-600 text-white rounded-full p-0.5 w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[8px]"><X size={8} strokeWidth={4}/></button>)}</div>))}
+                {!isReadOnly && (isAddingCat ? (<div className="flex items-center bg-slate-800 rounded-full px-2 py-1 border border-slate-600 animate-fade-in"><input autoFocus className="bg-transparent text-xs text-white w-16 outline-none" placeholder="分類名稱" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} onBlur={() => { if(!newCatName) setIsAddingCat(false); }} /><button onClick={handleAddCategory} className="text-amber-500 ml-1"><Check size={14}/></button></div>) : (<button onClick={() => setIsAddingCat(true)} className="p-1.5 bg-slate-800 rounded-full text-slate-500 hover:text-white hover:bg-slate-700"><Plus size={14}/></button>))}
+            </div>
+            {categoryFilter === 'alcohol' && (<div className="flex items-center gap-2 overflow-x-auto pb-2 mt-2 no-scrollbar w-full animate-slide-up"><span className="text-[10px] text-slate-500 font-bold shrink-0 uppercase tracking-wider pl-1">細項:</span><button onClick={()=>setSubCategoryFilter('all')} className={`whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium transition-colors border ${subCategoryFilter === 'all' ? 'bg-slate-700 border-slate-600 text-white' : 'border-transparent text-slate-500'}`}>全部</button>{availableBases.map(spirit => (<button key={spirit} onClick={()=>setSubCategoryFilter(spirit)} className={`whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium transition-colors border ${subCategoryFilter === spirit ? 'bg-slate-700 border-slate-600 text-white' : 'border-transparent text-slate-500'}`}>{safeString(spirit).split(' ')[0]}</button>))}</div>)}
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-32 custom-scrollbar">
+            {/* 權限控制：如果是唯讀 (readOnly)，點擊不會觸發編輯，也不顯示刪除按鈕 */}
+            {filteredIngredients.map(ing => <IngredientRow key={ing.id} ing={ing} onClick={() => !isReadOnly && startEdit('ingredient', ing)} onDelete={(id) => requestDelete(id, 'ingredient')} readOnly={isReadOnly} />)}
+            {filteredIngredients.length === 0 && <div className="text-center py-10 text-slate-500 flex flex-col items-center"><Layers size={40} className="mb-2 opacity-20"/><span>此分類無材料</span></div>}
+        </div>
+        {showBatchModal && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"><div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl p-6 animate-scale-in flex flex-col max-h-[80vh]"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-white flex items-center gap-2"><FilePlus size={20}/> 批次新增材料</h3><button onClick={() => setShowBatchModal(false)} className="text-slate-400 hover:text-white"><X size={24}/></button></div><p className="text-xs text-slate-400 mb-2">請輸入材料名稱，一行一個。新增後預設價格為 $0，可稍後再編輯。</p><textarea value={batchText} onChange={e => setBatchText(e.target.value)} placeholder={`例如:\n金巴利\n甜香艾酒\n蘇打水`} className="flex-1 bg-slate-800 border border-slate-600 rounded-xl p-3 text-slate-200 focus:border-amber-500 outline-none resize-none mb-4 h-48" autoFocus /><div className="mb-4"><label className="text-xs text-slate-500 font-bold uppercase block mb-1">預設分類</label><div className="flex gap-2">{ingCategories.slice(0, 3).map(cat => (<button key={cat.id} onClick={() => setBatchCategory(cat.id)} className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors ${batchCategory === cat.id ? 'bg-slate-700 border-amber-500 text-white' : 'border-slate-700 text-slate-500'}`}>{cat.label}</button>))}</div></div><button onClick={handleBatchSubmit} disabled={!batchText.trim()} className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm shadow-lg shadow-amber-900/20">確認新增 {batchText.split('\n').filter(l => l.trim()).length > 0 ? `(${batchText.split('\n').filter(l => l.trim()).length} 筆)` : ''}</button></div></div>)}
+    </div>); 
+};
 
 const QuickCalcScreen = ({ ingredients, availableBases }) => { const [mode, setMode] = useState('single'); const [price, setPrice] = useState(''); const [volume, setVolume] = useState(700); const [targetCostRate, setTargetCostRate] = useState(25); const [draftIngs, setDraftIngs] = useState([]); const [technique, setTechnique] = useState('Stir'); const [showIngPicker, setShowIngPicker] = useState(false); const addDraftIng = (ingId) => { if(!ingId) return; setDraftIngs([...draftIngs, { id: ingId, amount: 30 }]); }; const updateDraftAmount = (idx, val) => { const newIngs = [...draftIngs]; newIngs[idx].amount = val; setDraftIngs(newIngs); }; const removeDraftIng = (idx) => { setDraftIngs(draftIngs.filter((_, i) => i !== idx)); }; const draftStats = useMemo(() => calculateRecipeStats({ ingredients: draftIngs, technique }, ingredients), [draftIngs, technique, ingredients]); const suggestedPrice = draftStats.cost > 0 ? Math.ceil((draftStats.cost / (targetCostRate / 100)) / 10) * 10 : 0; const ingCategories = [ { id: 'alcohol', label: '基酒 Alcohol' }, { id: 'soft', label: '軟性飲料 Soft' }, { id: 'other', label: '其他 Other' } ]; return (<div className="h-full flex flex-col animate-fade-in text-slate-200 w-full bg-slate-950"><div className="shrink-0 bg-slate-950/95 backdrop-blur z-20 border-b border-slate-800 p-4 pt-safe"><h2 className="text-xl font-serif mb-4 mt-4">成本計算工具</h2><div className="flex bg-slate-800 p-1 rounded-xl"><button onClick={() => setMode('single')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all select-none ${mode === 'single' ? 'bg-slate-700 text-white shadow' : 'text-slate-500'}`}>純飲速算 (列表)</button><button onClick={() => setMode('draft')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all select-none ${mode === 'draft' ? 'bg-amber-600 text-white shadow' : 'text-slate-500'}`}>雞尾酒草稿 (Draft)</button></div></div><div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24 custom-scrollbar">{mode === 'single' ? (<div className="space-y-6 animate-fade-in"><div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-4"><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">單瓶成本 ($)</label><input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="800" className="w-full p-3 bg-slate-800 rounded-xl border border-slate-700 outline-none focus:border-amber-500 text-white font-mono text-lg" /></div><div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">容量 (ml)</label><input type="number" value={volume} onChange={e => setVolume(e.target.value)} className="w-full p-3 bg-slate-800 rounded-xl border border-slate-700 outline-none focus:border-amber-500 text-white font-mono text-lg" /></div></div><div className="space-y-2 pt-2 border-t border-slate-800"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">目標成本率 (Cost Rate)</label><div className="flex items-center gap-2"><button onClick={() => setTargetCostRate(Math.max(10, targetCostRate - 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">-</button><span className="text-amber-500 font-bold font-mono w-8 text-center">{targetCostRate}%</span><button onClick={() => setTargetCostRate(Math.min(100, targetCostRate + 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">+</button></div></div><input type="range" min="10" max="80" step="1" value={targetCostRate} onChange={e => setTargetCostRate(Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500" /></div></div><div className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-lg shadow-black/20"><table className="w-full text-sm"><thead><tr className="bg-slate-900 border-b border-slate-700"><th className="p-4 text-left font-bold text-slate-400">規格</th><th className="p-4 text-right font-bold text-slate-400">成本</th><th className="p-4 text-right font-bold text-amber-500">建議售價</th></tr></thead><tbody className="divide-y divide-slate-700/50">{[{ label: '1 ml', vol: 1 }, { label: '30 ml (Shot)', vol: 30 }, { label: '50 ml (Single)', vol: 50 }, { label: '60 ml (Double)', vol: 60 }, { label: '整瓶 (Bottle)', vol: safeNumber(volume) || 700 }].map((row, idx) => { const p = safeNumber(price); const v = safeNumber(volume) || 1; const cost = (p / v) * row.vol; const rate = safeNumber(targetCostRate) / 100 || 0.25; const suggested = p > 0 ? Math.ceil((cost / rate) / 10) * 10 : 0; return (<tr key={idx} className="hover:bg-slate-700/30 transition-colors"><td className="p-4 text-slate-200 font-medium">{row.label}{idx === 4 && <span className="block text-[10px] text-slate-500 font-normal">Based on {targetCostRate}% CR</span>}</td><td className="p-4 text-right text-slate-400 font-mono">${cost.toFixed(1)}</td><td className="p-4 text-right"><div className="text-amber-400 font-bold font-mono text-lg">${suggested}</div></td></tr>); })}</tbody></table></div></div>) : (<div className="space-y-4 animate-fade-in"><div className="space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">調製法</label><div className="flex gap-2">{['Shake', 'Stir', 'Build'].map(t => (<button key={t} onClick={()=>setTechnique(t)} className={`flex-1 py-2 rounded-lg text-sm border ${technique===t ? 'bg-slate-700 border-amber-500 text-white' : 'border-slate-700 text-slate-500'}`}>{t}</button>))}</div></div><div className="space-y-3">{draftIngs.map((item, idx) => { const ing = ingredients.find(i => i.id === item.id); return (<div key={idx} className="flex gap-2 items-center animate-slide-up"><div className="flex-1 p-3 bg-slate-800 rounded-xl border border-slate-700 text-sm">{ing?.nameZh}</div><input type="number" value={item.amount} onChange={e => updateDraftAmount(idx, Number(e.target.value))} className="w-20 p-3 bg-slate-800 rounded-xl border border-slate-700 text-center font-mono outline-none focus:border-amber-500"/><button onClick={() => removeDraftIng(idx)} className="p-3 text-rose-500 bg-slate-800 rounded-xl border border-slate-700 hover:bg-rose-900/20"><Trash2 size={18}/></button></div>); })}<button onClick={() => setShowIngPicker(true)} className="w-full p-3 bg-slate-800/50 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-white hover:border-slate-400 transition-colors text-center flex items-center justify-center gap-2"><Plus size={16}/> 加入材料</button></div><div className="space-y-2 pt-4 border-t border-slate-800"><div className="flex justify-between items-center"><label className="text-xs font-bold text-slate-500 uppercase">目標成本率 (Cost Rate)</label><div className="flex items-center gap-2"><button onClick={() => setTargetCostRate(Math.max(10, targetCostRate - 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">-</button><span className="text-amber-500 font-bold font-mono w-8 text-center">{targetCostRate}%</span><button onClick={() => setTargetCostRate(Math.min(100, targetCostRate + 5))} className="w-6 h-6 rounded bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700 hover:text-white">+</button></div></div><input type="range" min="10" max="80" step="1" value={targetCostRate} onChange={e => setTargetCostRate(Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500" /></div><div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 border border-slate-700 mt-4 shadow-xl"><div className="grid grid-cols-2 gap-6 mb-4"><div><div className="text-xs text-slate-500 mb-1">總成本</div><div className="text-2xl font-mono text-rose-400 font-bold">${draftStats.cost}</div></div><div className="text-right"><div className="text-xs text-slate-500 mb-1">總容量 (含融水)</div><div className="text-2xl font-mono text-blue-400 font-bold">{draftStats.volume}ml</div></div></div><div className="pt-4 border-t border-slate-700 flex justify-between items-center"><span className="text-slate-400 text-sm">預估酒精濃度</span><span className="text-xl font-bold text-amber-500">{draftStats.finalAbv.toFixed(1)}%</span></div><div className="pt-2 flex justify-between items-center border-t border-slate-700/50 mt-2"><span className="text-slate-400 text-sm">建議售價</span><span className="text-2xl font-bold text-emerald-400 font-mono">${suggestedPrice}</span></div></div></div>)}</div><IngredientPickerModal isOpen={showIngPicker} onClose={() => setShowIngPicker(false)} onSelect={addDraftIng} ingredients={ingredients} categories={ingCategories} availableBases={availableBases}/></div>); };
 
@@ -1106,7 +1134,7 @@ const LoginScreen = ({ onLogin }) => {
        }
     }
 
-    // --- 員工登入 (判斷是否為資深員工) ---
+    // --- 員工登入 ---
     let finalRole = role;
     if (role === 'staff') {
         if (staffList.length > 0) {
@@ -1114,7 +1142,7 @@ const LoginScreen = ({ onLogin }) => {
             const staff = staffList.find(s => s.id === selectedStaffId);
             if (staff && staff.password !== password) return setError("員工密碼錯誤");
             
-            // 關鍵修改：如果是資深員工，將角色升級為 'manager'
+            // 系統內部判斷權限，介面不顯示
             if (staff && staff.role === 'manager') {
                 finalRole = 'manager';
             }
@@ -1159,7 +1187,8 @@ const LoginScreen = ({ onLogin }) => {
                            <label className="text-xs text-slate-500 font-bold uppercase">選擇名字</label>
                            <select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-blue-500 appearance-none">
                                <option value="">-- 請選擇 --</option>
-                               {staffList.map(s => <option key={s.id} value={s.id}>{s.name} {s.role === 'manager' ? '(資深)' : ''}</option>)}
+                               {/* 這裡只顯示名字 */}
+                               {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                            </select>
                        </div>
                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-blue-500 text-center tracking-widest" placeholder="輸入員工密碼" />
@@ -1177,7 +1206,7 @@ const LoginScreen = ({ onLogin }) => {
   );
 };
 
-// --- 6. Main App Container (支援資深員工權限) ---
+// --- 6. Main App Container ---
 
 function MainAppContent() {
   const [activeTab, setActiveTab] = useState('recipes');
@@ -1186,7 +1215,7 @@ function MainAppContent() {
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [shopId, setShopId] = useState('');
-  const [userRole, setUserRole] = useState('customer'); // 'owner', 'manager', 'staff', 'customer'
+  const [userRole, setUserRole] = useState('customer'); 
    
   const [ingredients, setIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
@@ -1201,7 +1230,7 @@ function MainAppContent() {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [isSettingPassword, setIsSettingPassword] = useState(false);
 
-  // Staff Management (New: isManager checkbox)
+  // Staff Management
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffPwd, setNewStaffPwd] = useState('');
   const [isNewStaffManager, setIsNewStaffManager] = useState(false);
@@ -1326,10 +1355,9 @@ function MainAppContent() {
       showAlert('成功', '管理員密碼已更新');
   };
 
-  // --- Staff Management Logic (Update) ---
+  // --- Staff Management Logic ---
   const handleAddStaff = async () => {
       if (!newStaffName.trim() || !newStaffPwd.trim()) return showAlert('錯誤', '請輸入名字與密碼');
-      // 儲存角色權限
       const newStaff = { 
           id: generateId(), 
           name: newStaffName.trim(), 
@@ -1355,7 +1383,7 @@ function MainAppContent() {
       }
   };
 
-  // --- Restored Data Logic ---
+  // --- Data Management Logic ---
   const handleExportJSON = () => {
       const data = { ingredients, recipes, sections, staffList, version: '13.2' };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1460,7 +1488,6 @@ function MainAppContent() {
   };
 
   const requestDelete = async (id, type) => {
-    // 權限檢查：只有店長和資深員工可以刪除
     if (userRole !== 'owner' && userRole !== 'manager') return;
     showConfirm('刪除確認', '確定要刪除嗎？', async () => {
        if (window.firebase) {
@@ -1489,11 +1516,17 @@ function MainAppContent() {
 
   if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
 
-  // 權限定義
+  // 權限判斷
   const isOwner = userRole === 'owner';
   const isManager = userRole === 'manager';
-  const canEdit = isOwner || isManager; // 資深員工也有編輯權限
-  const showInventory = isOwner || isManager || userRole === 'staff';
+  const isStaff = userRole === 'staff';
+  
+  // 編輯：店長、經理
+  const canEdit = isOwner || isManager;
+  // 材料庫：店長、經理、員工(唯讀)
+  const showInventory = canEdit || isStaff;
+  // 速算：店長、經理、員工
+  const showQuickCalc = canEdit || isStaff;
 
   return (
     <div className="fixed inset-0 bg-slate-950 text-slate-200 font-sans flex flex-col w-full">
@@ -1512,7 +1545,6 @@ function MainAppContent() {
             setViewingItem={setViewingItem} 
             availableTags={availableTags} 
             availableBases={availableBases}
-            // 技巧：如果是有編輯權限的人，對下層元件「偽裝」成 owner，這樣就能看到編輯按鈕
             userRole={canEdit ? 'owner' : 'customer'}
             isConsumerMode={!canEdit}
             onUnlock={handleUnlockRequest}
@@ -1533,6 +1565,7 @@ function MainAppContent() {
            />
         )}
 
+        {/* 傳入 isReadOnly 控制員工權限 */}
         {activeTab === 'ingredients' && showInventory && (
           <InventoryScreen 
             ingredients={ingredients} 
@@ -1543,9 +1576,12 @@ function MainAppContent() {
             showConfirm={showConfirm} 
             onBatchAdd={handleBatchAddIngredients} 
             availableBases={availableBases}
+            isReadOnly={isStaff} 
           />
         )}
-        {activeTab === 'quick' && canEdit && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
+        
+        {/* 開放速算給員工 */}
+        {activeTab === 'quick' && showQuickCalc && <QuickCalcScreen ingredients={ingredients} availableBases={availableBases} />}
         
         {activeTab === 'tools' && (
            <div className="h-full flex flex-col overflow-y-auto p-6 space-y-6 pt-20 custom-scrollbar pb-32">
@@ -1615,7 +1651,7 @@ function MainAppContent() {
              </div>
              )}
              
-             {isOwner && (
+             {canEdit && (
              <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
                  <h3 className="text-sm font-bold text-white flex gap-2 items-center"><Users size={16}/> 訪客模式</h3>
                  <button onClick={() => setUserRole('customer')} className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2"><Lock size={16}/> 鎖定為顧客模式</button>
@@ -1629,7 +1665,7 @@ function MainAppContent() {
         )}
       </main>
 
-      {/* Overlays (No change needed) */}
+      {/* Overlays */}
       {showPasswordModal && (
           <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6">
               <div className="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-6">
@@ -1658,7 +1694,7 @@ function MainAppContent() {
            { id: 'recipes', icon: Beer, l: '酒單' },
            { id: 'featured', icon: Star, l: '專區' }, 
            showInventory && { id: 'ingredients', icon: GlassWater, l: '材料' },
-           canEdit && { id: 'quick', icon: Calculator, l: '速算' },
+           showQuickCalc && { id: 'quick', icon: Calculator, l: '速算' },
            { id: 'tools', icon: Settings, l: '設定' }
          ].filter(Boolean).map(t => (
            <button key={t.id} onClick={()=>setActiveTab(t.id)} className={`flex flex-col items-center gap-1 ${activeTab===t.id ? 'text-amber-500' : 'text-slate-500'}`}>
