@@ -60,7 +60,8 @@ import {
   UserCog,
   LogOut,
   Utensils,
-  ChefHat, // 新增圖示
+  ChefHat,
+  Coffee,
 } from 'lucide-react';
 
 // ==========================================
@@ -282,6 +283,7 @@ const DEFAULT_BASE_SPIRITS = [
   'Vodka 伏特加',
   'Brandy 白蘭地',
   'Liqueur 利口酒',
+  'Soft Drink 軟飲',
 ];
 
 const ICON_TYPES = {
@@ -428,7 +430,6 @@ const calculateRecipeStats = (recipe, allIngredients) => {
   if (!recipe)
     return { cost: 0, costRate: 0, abv: 0, volume: 0, price: 0, finalAbv: 0 };
 
-  // 針對餐點 (Food) 的簡單處理
   if (recipe.type === 'food') {
     return {
       cost: 0,
@@ -472,7 +473,7 @@ const calculateRecipeStats = (recipe, allIngredients) => {
     });
   }
   if (recipe.garnish) totalCost += 5;
-  const finalAbv = totalVolume > 0 ? (totalAlcoholVol / totalVolume) * 100 : 0; // No Dilution
+  const finalAbv = totalVolume > 0 ? (totalAlcoholVol / totalVolume) * 100 : 0;
   const price =
     recipe.price && recipe.price > 0
       ? recipe.price
@@ -1317,9 +1318,11 @@ const RecipeListScreen = ({
   });
   const [isGridEditing, setIsGridEditing] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
+
+  // 預設方塊列表 (已包含軟性飲料)
   const [gridCategories, setGridCategories] = useState(() => {
     try {
-      const saved = localStorage.getItem('bar_grid_cats_v3');
+      const saved = localStorage.getItem('bar_grid_cats_v4'); // Version bump
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return [
@@ -1365,11 +1368,18 @@ const RecipeListScreen = ({
         iconType: 'snifter',
         gradient: 'from-purple-600 to-violet-700',
       },
+      {
+        id: 'soft',
+        nameZh: '軟飲',
+        nameEn: 'Soft Drink',
+        iconType: 'soft',
+        gradient: 'from-teal-600 to-emerald-700',
+      }, // 預設加入軟飲
     ];
   });
 
   useEffect(() => {
-    localStorage.setItem('bar_grid_cats_v3', JSON.stringify(gridCategories));
+    localStorage.setItem('bar_grid_cats_v4', JSON.stringify(gridCategories));
   }, [gridCategories]);
   useEffect(() => {
     if (activeBlock)
@@ -1385,12 +1395,14 @@ const RecipeListScreen = ({
 
   const handleBlockSelect = (cat) => {
     setActiveBlock(cat);
+    // 嘗試從全域基酒列表中找到對應的字串
     const baseMatch = availableBases.find(
       (b) => b.includes(cat.nameZh) || b.includes(cat.nameEn)
     );
     if (baseMatch) setFilterBases([baseMatch]);
     else if (availableTags.includes(cat.nameZh)) setFilterTags([cat.nameZh]);
   };
+
   const handleAddCategory = (newCat) =>
     setGridCategories([...gridCategories, newCat]);
   const handleDeleteCategory = (id) => {
@@ -1406,13 +1418,14 @@ const RecipeListScreen = ({
   const filtered = useMemo(() => {
     const safeIngs = Array.isArray(ingredients) ? ingredients : [];
     const safeRecipes = Array.isArray(recipes) ? recipes : [];
+    // 將勾選「加入單品」的材料轉換為類似酒譜的格式
     const singleIngredients = safeIngs
       .filter((i) => i.addToSingle)
       .map((i) => ({
         ...i,
         category: 'single',
         type: 'single',
-        baseSpirit: i.subType || '',
+        baseSpirit: i.subType || '', // 這裡很重要：如果材料有 subType，它會變成 baseSpirit
         priceShot: i.priceShot || '',
         priceGlass: i.priceGlass || '',
         priceBottle: i.priceBottle || '',
@@ -1435,14 +1448,28 @@ const RecipeListScreen = ({
         filterBases.length === 0 || filterBases.includes(r.baseSpirit);
       const matchTags =
         filterTags.length === 0 || filterTags.every((t) => r.tags?.includes(t));
+
       let matchGrid = true;
       if (activeBlock) {
         const baseMatch = availableBases.find(
           (b) =>
             b.includes(activeBlock.nameZh) || b.includes(activeBlock.nameEn)
         );
-        if (baseMatch) matchGrid = r.baseSpirit === baseMatch;
-        else matchGrid = r.tags?.includes(activeBlock.nameZh);
+        if (baseMatch) {
+          // --- 關鍵修正：軟性飲料特殊處理 ---
+          // 如果方塊是對應到 "Soft Drink"，我們要同時找 type='soft' 的材料
+          if (baseMatch.includes('Soft') || baseMatch.includes('軟')) {
+            matchGrid =
+              r.type === 'soft' ||
+              r.baseSpirit === baseMatch ||
+              r.subType === baseMatch;
+          } else {
+            matchGrid = r.baseSpirit === baseMatch;
+          }
+        } else {
+          // 如果不是基酒，嘗試匹配標籤
+          matchGrid = r.tags?.includes(activeBlock.nameZh);
+        }
       }
       return matchCat && matchSearch && matchBase && matchTags && matchGrid;
     });
@@ -2797,9 +2824,13 @@ const EditorSheet = ({
     setNewItemValue('');
   };
 
+  // --- 修正照片上傳 ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Reset input value so onChange can trigger again for the same file if needed
+    e.target.value = null;
+
     if (file.size > 10 * 1024 * 1024) {
       if (showAlert) showAlert('錯誤', '圖片太大，請選擇小於 10MB 的照片');
       else alert('圖片太大');
@@ -2816,7 +2847,7 @@ const EditorSheet = ({
         const MAX_HEIGHT = 300;
         if (width > height) {
           if (width > MAX_WIDTH) {
-            height *= maxWidth / width;
+            height *= MAX_WIDTH / width;
             width = MAX_WIDTH;
           }
         } else {
@@ -3936,7 +3967,7 @@ const ViewerOverlay = ({
             <div className="flex gap-2 mb-2">
               {isFood && (
                 <span className="text-[10px] text-emerald-200 bg-emerald-900/40 px-1.5 py-0.5 rounded border border-emerald-800/50">
-                  餐點
+                  {item.category || '餐點'}
                 </span>
               )}
               {isSingle ? (
@@ -4294,7 +4325,7 @@ const LoginScreen = ({ onLogin }) => {
         Bar Manager
       </h1>
       <p className="text-slate-400 text-sm mb-8">
-        雲端調酒管理系統 V14.0 (餐/酒0.1版)
+        雲端調酒管理系統 v13.2 (Pro)
       </p>
 
       <div className="w-full max-w-sm space-y-4">
