@@ -77,7 +77,6 @@ const FIREBASE_CONFIG = {
   appId: '1:836067365212:web:65cd66157b85d76afab199',
 };
 
-// Lazy load Firebase SDK
 const loadFirebase = () => {
   return new Promise((resolve, reject) => {
     if (window.firebase && window.firebase.firestore)
@@ -107,7 +106,6 @@ const loadFirebase = () => {
   });
 };
 
-// Image Compression
 const compressImage = (base64Str, maxWidth = 800, quality = 0.6) => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -129,10 +127,6 @@ const compressImage = (base64Str, maxWidth = 800, quality = 0.6) => {
     img.onerror = () => resolve(base64Str);
   });
 };
-
-// ==========================================
-// 0.1 IndexedDB (Local Cache)
-// ==========================================
 
 const DB_NAME = 'BarManagerDB';
 const STORE_NAME = 'images';
@@ -232,10 +226,7 @@ const AsyncImage = memo(({ imageId, alt, className, fallback }) => {
   return <img src={src} alt={alt} className={className} loading="lazy" />;
 });
 
-// ==========================================
-// 0.5 Error Boundary
-// ==========================================
-
+// --- Error Boundary ---
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -258,22 +249,29 @@ class ErrorBoundary extends React.Component {
           <p className="text-slate-400 mb-8 text-sm max-w-xs">
             {this.state.error?.toString()}
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full max-w-xs py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-white shadow-lg"
-          >
-            重新整理頁面
-          </button>
+          <div className="space-y-3 w-full max-w-xs">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-amber-600 hover:bg-amber-500 rounded-xl font-bold text-white shadow-lg"
+            >
+              重新整理頁面
+            </button>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+              className="w-full py-3 border border-rose-500 text-rose-500 rounded-xl font-bold hover:bg-rose-900/20"
+            >
+              重置所有資料 (救命按鈕)
+            </button>
+          </div>
         </div>
       );
     }
     return this.props.children;
   }
 }
-
-// ==========================================
-// 1. Constants & Helper Functions
-// ==========================================
 
 const DEFAULT_BASE_SPIRITS = [
   'Gin 琴酒',
@@ -283,7 +281,6 @@ const DEFAULT_BASE_SPIRITS = [
   'Vodka 伏特加',
   'Brandy 白蘭地',
   'Liqueur 利口酒',
-  'Soft Drink 軟飲',
 ];
 
 const ICON_TYPES = {
@@ -456,9 +453,11 @@ const calculateRecipeStats = (recipe, allIngredients) => {
       price,
     };
   }
+
   let totalCost = 0,
     totalAlcoholVol = 0,
     totalVolume = 0;
+
   if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
     recipe.ingredients.forEach((item) => {
       const ing = (allIngredients || []).find((i) => i.id === item.id);
@@ -473,12 +472,14 @@ const calculateRecipeStats = (recipe, allIngredients) => {
     });
   }
   if (recipe.garnish) totalCost += 5;
+
   const finalAbv = totalVolume > 0 ? (totalAlcoholVol / totalVolume) * 100 : 0;
   const price =
     recipe.price && recipe.price > 0
       ? recipe.price
       : Math.ceil(totalCost / 0.3 / 10) * 10;
   const costRate = price > 0 ? (totalCost / price) * 100 : 0;
+
   return {
     cost: Math.round(totalCost),
     costRate,
@@ -487,10 +488,6 @@ const calculateRecipeStats = (recipe, allIngredients) => {
     price,
   };
 };
-
-// ==========================================
-// 2. Components
-// ==========================================
 
 const PricingTable = ({ recipe }) => {
   if (recipe.type !== 'single' && !recipe.isIngredient) return null;
@@ -663,7 +660,7 @@ const RecipeCard = memo(({ recipe, ingredients, onClick, role }) => {
     [recipe, ingredients]
   );
   const isSingle = recipe.type === 'single' || recipe.isIngredient;
-  const isFood = recipe.type === 'food'; // 判斷是否為餐點
+  const isFood = recipe.type === 'food';
   const isOwnerOrManager = role === 'owner' || role === 'manager';
 
   const displayPrice = isSingle
@@ -729,7 +726,6 @@ const RecipeCard = memo(({ recipe, ingredients, onClick, role }) => {
             ))}
           </div>
         </div>
-        {/* 餐點不顯示酒精濃度和成本率，除非未來想加成本 */}
         {!isFood && (
           <div className="flex items-center gap-3 text-xs font-mono text-slate-500 pt-1 border-t border-slate-700/50 mt-1">
             {isSingle ? (
@@ -793,19 +789,69 @@ const ChipSelector = ({ title, options, selected, onSelect }) => {
   );
 };
 
-const CategoryEditModal = ({ isOpen, onClose, onSave }) => {
+const CategoryEditModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  availableBases,
+  ingCategories,
+}) => {
   const [nameZh, setNameZh] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [iconType, setIconType] = useState('whisky');
   const [gradient, setGradient] = useState('from-slate-600 to-gray-700');
+  const [targetBase, setTargetBase] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setNameZh('');
+      setNameEn('');
+      setTargetBase('');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
   const handleSubmit = () => {
     if (!nameZh) return;
-    onSave({ id: generateId(), nameZh, nameEn, iconType, gradient });
-    setNameZh('');
-    setNameEn('');
+    onSave({
+      id: generateId(),
+      nameZh,
+      nameEn,
+      iconType,
+      gradient,
+      targetBase,
+    });
     onClose();
   };
+
+  const handleTargetChange = (e) => {
+    const val = e.target.value;
+    setTargetBase(val);
+
+    if (!nameZh) {
+      if (val === 'TYPE_SOFT') {
+        setNameZh('軟性飲料');
+        setNameEn('Soft Drink');
+      } else if (val.startsWith('TYPE_')) {
+        const rawId = val.replace('TYPE_', '');
+        const found = ingCategories.find((c) => c.id === rawId);
+        if (found) {
+          setNameZh(found.label);
+          setNameEn(found.label);
+        }
+      } else {
+        const parts = val.split(' ');
+        if (parts.length > 1) {
+          setNameZh(parts[1]);
+          setNameEn(parts[0]);
+        } else {
+          setNameZh(val);
+        }
+      }
+    }
+  };
+
   const gradients = [
     { id: 'blue', val: 'from-blue-600 to-indigo-700' },
     { id: 'amber', val: 'from-amber-600 to-orange-700' },
@@ -815,6 +861,7 @@ const CategoryEditModal = ({ isOpen, onClose, onSave }) => {
     { id: 'cyan', val: 'from-cyan-600 to-blue-700' },
     { id: 'slate', val: 'from-slate-600 to-gray-700' },
   ];
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-scale-in">
@@ -826,14 +873,71 @@ const CategoryEditModal = ({ isOpen, onClose, onSave }) => {
         </div>
         <div className="space-y-4">
           <div>
+            <label className="text-xs font-bold text-amber-500 uppercase mb-1 block">
+              1. 選擇篩選目標
+            </label>
+            <select
+              value={targetBase}
+              onChange={handleTargetChange}
+              className="w-full bg-slate-800 border border-amber-500/50 rounded-lg p-3 text-white outline-none focus:border-amber-500 appearance-none"
+            >
+              <option value="" className="text-slate-400">
+                -- 請選擇分類 --
+              </option>
+              <optgroup
+                label="特殊分類"
+                className="text-amber-500 bg-slate-900"
+              >
+                <option value="TYPE_SOFT" className="text-white">
+                  軟性飲料 (Soft Drink)
+                </option>
+              </optgroup>
+
+              <optgroup
+                label="材料庫分類 (Ingredient Type)"
+                className="text-blue-400 bg-slate-900"
+              >
+                {ingCategories &&
+                  ingCategories
+                    .filter((c) => !['alcohol', 'soft', 'other'].includes(c.id))
+                    .map((c) => (
+                      <option
+                        key={c.id}
+                        value={`TYPE_${c.id}`}
+                        className="text-white"
+                      >
+                        {c.label}
+                      </option>
+                    ))}
+              </optgroup>
+
+              <optgroup
+                label="基酒 (Base Spirit)"
+                className="text-purple-400 bg-slate-900"
+              >
+                {availableBases
+                  .filter((b) => !b.includes('Soft') && !b.includes('軟'))
+                  .map((b) => (
+                    <option key={b} value={b} className="text-white">
+                      {b}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
+            <p className="text-[10px] text-slate-500 mt-1">
+              選定後，點擊方塊只會顯示該分類的材料。
+            </p>
+          </div>
+
+          <div>
             <label className="text-xs font-bold text-slate-500 uppercase">
-              中文名稱
+              2. 中文名稱 (顯示用)
             </label>
             <input
               value={nameZh}
               onChange={(e) => setNameZh(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white outline-none focus:border-amber-500"
-              placeholder="例如: 威士忌"
+              placeholder="例如: 紅白酒"
             />
           </div>
           <div>
@@ -844,9 +948,10 @@ const CategoryEditModal = ({ isOpen, onClose, onSave }) => {
               value={nameEn}
               onChange={(e) => setNameEn(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white outline-none focus:border-amber-500"
-              placeholder="例如: Whisky"
+              placeholder="例如: Wine"
             />
           </div>
+
           <div>
             <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
               選擇圖示
@@ -1114,10 +1219,6 @@ const IngredientPickerModal = ({
   );
 };
 
-// ==========================================
-// 3.5 New Screen: Food List (With Categories)
-// ==========================================
-
 const FoodListScreen = ({
   foodItems,
   searchTerm,
@@ -1197,7 +1298,6 @@ const FoodListScreen = ({
           )}
         </div>
 
-        {/* Categories Bar */}
         <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 no-scrollbar w-full">
           <button
             onClick={() => setActiveCat('all')}
@@ -1287,8 +1387,9 @@ const FoodListScreen = ({
     </div>
   );
 };
+
 // ==========================================
-// 4. Screens (核心頁面)
+// 4. Screens (核心頁面 - 修復: 接收 ingCategories)
 // ==========================================
 
 const RecipeListScreen = ({
@@ -1304,6 +1405,7 @@ const RecipeListScreen = ({
   availableBases,
   userRole,
   onUnlock,
+  ingCategories, // 關鍵修復：從上層接收分類表
 }) => {
   const [filterBases, setFilterBases] = useState([]);
   const [filterTags, setFilterTags] = useState([]);
@@ -1319,10 +1421,10 @@ const RecipeListScreen = ({
   const [isGridEditing, setIsGridEditing] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
 
-  // 預設方塊列表 (已包含軟性飲料)
+  // 預設方塊列表
   const [gridCategories, setGridCategories] = useState(() => {
     try {
-      const saved = localStorage.getItem('bar_grid_cats_v4'); // Version bump
+      const saved = localStorage.getItem('bar_grid_cats_v9');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return [
@@ -1332,6 +1434,7 @@ const RecipeListScreen = ({
         nameEn: '琴酒',
         iconType: 'martini',
         gradient: 'from-blue-600 to-indigo-700',
+        targetBase: 'Gin 琴酒',
       },
       {
         id: 'whisky',
@@ -1339,6 +1442,7 @@ const RecipeListScreen = ({
         nameEn: '威士忌',
         iconType: 'whisky',
         gradient: 'from-amber-600 to-orange-700',
+        targetBase: 'Whisky 威士忌',
       },
       {
         id: 'rum',
@@ -1346,6 +1450,7 @@ const RecipeListScreen = ({
         nameEn: '蘭姆酒',
         iconType: 'highball',
         gradient: 'from-rose-600 to-pink-700',
+        targetBase: 'Rum 蘭姆酒',
       },
       {
         id: 'tequila',
@@ -1353,6 +1458,7 @@ const RecipeListScreen = ({
         nameEn: '龍舌蘭',
         iconType: 'shot',
         gradient: 'from-emerald-600 to-teal-700',
+        targetBase: 'Tequila 龍舌蘭',
       },
       {
         id: 'vodka',
@@ -1360,6 +1466,7 @@ const RecipeListScreen = ({
         nameEn: '伏特加',
         iconType: 'martini',
         gradient: 'from-cyan-600 to-blue-700',
+        targetBase: 'Vodka 伏特加',
       },
       {
         id: 'brandy',
@@ -1367,6 +1474,7 @@ const RecipeListScreen = ({
         nameEn: '白蘭地',
         iconType: 'snifter',
         gradient: 'from-purple-600 to-violet-700',
+        targetBase: 'Brandy 白蘭地',
       },
       {
         id: 'soft',
@@ -1374,12 +1482,13 @@ const RecipeListScreen = ({
         nameEn: 'Soft Drink',
         iconType: 'soft',
         gradient: 'from-teal-600 to-emerald-700',
-      }, // 預設加入軟飲
+        targetBase: 'TYPE_SOFT',
+      },
     ];
   });
 
   useEffect(() => {
-    localStorage.setItem('bar_grid_cats_v4', JSON.stringify(gridCategories));
+    localStorage.setItem('bar_grid_cats_v9', JSON.stringify(gridCategories));
   }, [gridCategories]);
   useEffect(() => {
     if (activeBlock)
@@ -1395,16 +1504,30 @@ const RecipeListScreen = ({
 
   const handleBlockSelect = (cat) => {
     setActiveBlock(cat);
-    // 嘗試從全域基酒列表中找到對應的字串
-    const baseMatch = availableBases.find(
-      (b) => b.includes(cat.nameZh) || b.includes(cat.nameEn)
-    );
-    if (baseMatch) setFilterBases([baseMatch]);
-    else if (availableTags.includes(cat.nameZh)) setFilterTags([cat.nameZh]);
+    const target = cat.targetBase;
+    if (target && !target.startsWith('TYPE_')) {
+      if (availableBases.includes(target)) setFilterBases([target]);
+    } else if (!target) {
+      const baseMatch = availableBases.find(
+        (b) => b.includes(cat.nameZh) || b.includes(cat.nameEn)
+      );
+      if (baseMatch) setFilterBases([baseMatch]);
+    }
   };
 
-  const handleAddCategory = (newCat) =>
+  const handleAddCategory = (newCat) => {
+    if (!newCat.targetBase) {
+      if (
+        newCat.nameZh.includes('軟') ||
+        newCat.nameEn.toLowerCase().includes('soft')
+      ) {
+        newCat.targetBase = 'TYPE_SOFT';
+        newCat.iconType = 'soft';
+      }
+    }
     setGridCategories([...gridCategories, newCat]);
+  };
+
   const handleDeleteCategory = (id) => {
     if (confirm(`確定移除此方塊嗎？`))
       setGridCategories(gridCategories.filter((c) => c.id !== id));
@@ -1418,14 +1541,15 @@ const RecipeListScreen = ({
   const filtered = useMemo(() => {
     const safeIngs = Array.isArray(ingredients) ? ingredients : [];
     const safeRecipes = Array.isArray(recipes) ? recipes : [];
-    // 將勾選「加入單品」的材料轉換為類似酒譜的格式
+
+    // 關鍵修正：保留自訂分類的 type，確保 Filter 邏輯能正確運作
     const singleIngredients = safeIngs
       .filter((i) => i.addToSingle)
       .map((i) => ({
         ...i,
         category: 'single',
-        type: 'single',
-        baseSpirit: i.subType || '', // 這裡很重要：如果材料有 subType，它會變成 baseSpirit
+        type: i.type, // 重要：不要強制覆蓋為 'single'，保留原始分類 ID (如 wine)
+        baseSpirit: i.subType || '',
         priceShot: i.priceShot || '',
         priceGlass: i.priceGlass || '',
         priceBottle: i.priceBottle || '',
@@ -1439,38 +1563,53 @@ const RecipeListScreen = ({
     }
 
     return sourceList.filter((r) => {
+      // 修正：因為上面保留了原始 type，這裡的判斷要放寬
       const matchCat =
-        recipeCategoryFilter === 'all' || r.type === recipeCategoryFilter;
+        recipeCategoryFilter === 'all' ||
+        r.type === recipeCategoryFilter ||
+        (recipeCategoryFilter === 'single' &&
+          (r.type === 'soft' || r.isIngredient || r.type === 'single'));
+
       const matchSearch =
         safeString(r.nameZh).includes(searchTerm) ||
         safeString(r.nameEn).toLowerCase().includes(searchTerm.toLowerCase());
+
       const matchBase =
-        filterBases.length === 0 || filterBases.includes(r.baseSpirit);
+        filterBases.length === 0 ||
+        filterBases.includes(r.baseSpirit) ||
+        filterBases.includes(r.subType);
       const matchTags =
         filterTags.length === 0 || filterTags.every((t) => r.tags?.includes(t));
 
       let matchGrid = true;
       if (activeBlock) {
-        const baseMatch = availableBases.find(
-          (b) =>
-            b.includes(activeBlock.nameZh) || b.includes(activeBlock.nameEn)
-        );
-        if (baseMatch) {
-          // --- 關鍵修正：軟性飲料特殊處理 ---
-          // 如果方塊是對應到 "Soft Drink"，我們要同時找 type='soft' 的材料
-          if (baseMatch.includes('Soft') || baseMatch.includes('軟')) {
-            matchGrid =
-              r.type === 'soft' ||
-              r.baseSpirit === baseMatch ||
-              r.subType === baseMatch;
+        let target = activeBlock.targetBase;
+        if (!target) {
+          const found = availableBases.find(
+            (b) =>
+              b.includes(activeBlock.nameZh) || b.includes(activeBlock.nameEn)
+          );
+          if (found) target = found;
+        }
+
+        if (target) {
+          if (target === 'TYPE_SOFT') {
+            matchGrid = r.type === 'soft';
+          } else if (target.startsWith('TYPE_')) {
+            const rawType = target.replace('TYPE_', '');
+            if (r.isIngredient) {
+              matchGrid = r.type === rawType; // 這裡將會正確匹配 (如 type === wine)
+            } else {
+              matchGrid = false;
+            }
           } else {
-            matchGrid = r.baseSpirit === baseMatch;
+            matchGrid = r.baseSpirit === target || r.subType === target;
           }
         } else {
-          // 如果不是基酒，嘗試匹配標籤
           matchGrid = r.tags?.includes(activeBlock.nameZh);
         }
       }
+
       return matchCat && matchSearch && matchBase && matchTags && matchGrid;
     });
   }, [
@@ -1625,7 +1764,7 @@ const RecipeListScreen = ({
             ) : (
               <div className="text-center py-10 text-slate-500 flex flex-col items-center">
                 <Filter size={48} className="mb-4 opacity-20" />
-                <p>沒有找到符合條件的酒譜</p>
+                <p>沒有找到符合條件的項目</p>
                 {activeBlock && (
                   <button
                     onClick={clearBlockFilter}
@@ -1640,15 +1779,17 @@ const RecipeListScreen = ({
           </div>
         )}
       </div>
+      {/* 修正：正確傳遞 ingCategories 屬性 */}
       <CategoryEditModal
         isOpen={showCatModal}
         onClose={() => setShowCatModal(false)}
         onSave={handleAddCategory}
+        availableBases={availableBases}
+        ingCategories={ingCategories}
       />
     </div>
   );
 };
-
 const FeaturedSectionScreen = ({
   sections,
   setSections,
@@ -1796,6 +1937,11 @@ const FeaturedSectionScreen = ({
   };
 
   const activeSection = sections.find((s) => s.id === activeSectionId);
+
+  if (activeSectionId && !activeSection) {
+    setActiveSectionId(null);
+    return null;
+  }
 
   if (!activeSectionId) {
     return (
@@ -2102,7 +2248,6 @@ const FeaturedSectionScreen = ({
   );
 };
 
-// 修正：InventoryScreen 加入搜尋與排序
 const InventoryScreen = ({
   ingredients,
   startEdit,
@@ -2122,7 +2267,6 @@ const InventoryScreen = ({
   const [batchText, setBatchText] = useState('');
   const [batchCategory, setBatchCategory] = useState('other');
 
-  // 新增：搜尋與排序狀態
   const [sortBy, setSortBy] = useState('name');
   const [search, setSearch] = useState('');
 
@@ -2169,13 +2313,11 @@ const InventoryScreen = ({
   };
 
   const filteredIngredients = useMemo(() => {
-    // Filter
     let list = ingredients.filter((i) => {
       if (categoryFilter !== 'all' && i.type !== categoryFilter) return false;
       if (categoryFilter === 'alcohol' && subCategoryFilter !== 'all') {
         return i.subType === subCategoryFilter;
       }
-      // 搜尋邏輯
       if (
         search &&
         !(
@@ -2186,7 +2328,6 @@ const InventoryScreen = ({
         return false;
       return true;
     });
-    // Sort
     if (sortBy === 'name') {
       list.sort((a, b) =>
         (a.nameZh || '').localeCompare(b.nameZh || '', 'zh-Hant')
@@ -2203,7 +2344,6 @@ const InventoryScreen = ({
         <div className="flex justify-between items-center mb-2 mt-4">
           <h2 className="text-2xl font-serif text-slate-100">材料庫</h2>
           <div className="flex gap-2">
-            {/* 排序按鈕 */}
             {!isReadOnly && (
               <button
                 onClick={() =>
@@ -2243,7 +2383,6 @@ const InventoryScreen = ({
           </div>
         </div>
 
-        {/* 新增：搜尋欄 */}
         <div className="relative mb-3">
           <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4" />
           <input
@@ -2812,25 +2951,21 @@ const EditorSheet = ({
       if (mode === 'recipe') setItem({ ...item, baseSpirit: val });
     }
 
-    // --- 新增：處理自訂餐點分類 ---
     if (addingItem === 'foodCat') {
       const newCat = { id: generateId(), label: val };
       setFoodCategories([...foodCategories, newCat]);
       setItem({ ...item, category: val });
     }
-    // ---------------------------
 
     setAddingItem(null);
     setNewItemValue('');
   };
 
-  // --- 修正照片上傳 ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-    // Reset input value so onChange can trigger again for the same file if needed
     e.target.value = null;
 
+    if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
       if (showAlert) showAlert('錯誤', '圖片太大，請選擇小於 10MB 的照片');
       else alert('圖片太大');
@@ -3049,7 +3184,7 @@ const EditorSheet = ({
                 value={item.nameZh}
                 onChange={(e) => setItem({ ...item, nameZh: e.target.value })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
-                placeholder="例如: 炸雞翅"
+                placeholder="例如: 內格羅尼"
               />
             </div>
             <div className="space-y-1 col-span-2">
@@ -3060,7 +3195,7 @@ const EditorSheet = ({
                 value={item.nameEn}
                 onChange={(e) => setItem({ ...item, nameEn: e.target.value })}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-500 outline-none"
-                placeholder="e.g. Chicken Wings"
+                placeholder="e.g. Negroni"
               />
             </div>
 
@@ -3091,7 +3226,6 @@ const EditorSheet = ({
               </div>
             )}
 
-            {/* --- 餐點模式：分類選單 --- */}
             {isFood && (
               <div className="space-y-1 animate-fade-in">
                 <div className="flex justify-between items-center">
@@ -3164,7 +3298,6 @@ const EditorSheet = ({
               </div>
             )}
 
-            {/* --- 基酒細項選單 --- */}
             {mode === 'ingredient' && item.type === 'alcohol' && (
               <div className="space-y-1 animate-fade-in">
                 <div className="flex justify-between items-center">
@@ -3214,11 +3347,13 @@ const EditorSheet = ({
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 appearance-none"
                     >
                       <option value="">-- 無 --</option>
-                      {availableBases.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
+                      {availableBases
+                        .filter((b) => !b.includes('Soft') && !b.includes('軟'))
+                        .map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))}
                     </select>
                     <div className="absolute right-3 top-3.5 pointer-events-none text-slate-500">
                       <svg
@@ -3236,9 +3371,8 @@ const EditorSheet = ({
                 )}
               </div>
             )}
-            {/* ----------------------------------------------- */}
 
-            {mode === 'recipe' && !isSingle && (
+            {mode === 'recipe' && !isSingle && !isFood && (
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <label className="text-xs font-bold text-slate-500 uppercase">
@@ -3297,7 +3431,6 @@ const EditorSheet = ({
             )}
           </div>
 
-          {/* 餐點編輯模式 (只顯示價格與描述) */}
           {isFood && (
             <div className="space-y-4">
               <div className="space-y-1">
@@ -3330,7 +3463,6 @@ const EditorSheet = ({
             </div>
           )}
 
-          {/* 材料庫編輯模式 */}
           {mode === 'ingredient' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 bg-slate-800/50 p-4 rounded-xl border border-slate-800">
@@ -3385,7 +3517,6 @@ const EditorSheet = ({
                 </div>
               </div>
 
-              {/* 加入單品設定 */}
               <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-800 space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-bold text-slate-200 flex items-center gap-2">
@@ -3482,10 +3613,8 @@ const EditorSheet = ({
             </div>
           )}
 
-          {/* 酒譜編輯模式 */}
-          {mode === 'recipe' && (
+          {mode === 'recipe' && !isSingle && (
             <div className="space-y-6">
-              {/* 單品酒譜編輯 (Recipe Single) */}
               {isSingle ? (
                 <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 space-y-4">
                   <h3 className="text-amber-500 font-bold text-sm flex items-center gap-2">
@@ -3673,9 +3802,9 @@ const EditorSheet = ({
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500">預估 ABV</div>
+                    <div className="text-xs text-slate-500">總液量</div>
                     <div className="text-xl font-mono text-blue-400 font-bold">
-                      {stats.finalAbv.toFixed(1)}%
+                      {stats.volume}ml
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -3913,7 +4042,6 @@ const EditorSheet = ({
         </div>
       </div>
 
-      {/* Ingredient Picker Modal */}
       <IngredientPickerModal
         isOpen={showIngPicker}
         onClose={() => setShowIngPicker(false)}
@@ -3946,7 +4074,6 @@ const ViewerOverlay = ({
         onClick={onClose}
       />
       <div className="relative w-full md:w-[600px] bg-slate-950 h-full shadow-2xl flex flex-col animate-slide-up overflow-hidden">
-        {/* Hero Image */}
         <div className="relative h-72 shrink-0">
           <AsyncImage
             imageId={item.image}
@@ -3998,7 +4125,6 @@ const ViewerOverlay = ({
 
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950">
           <div className="p-6 space-y-8 pb-8">
-            {/* Stats Row */}
             {!isSingle && (
               <div className="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800/50 backdrop-blur-sm">
                 {!isFood && (
@@ -4044,10 +4170,8 @@ const ViewerOverlay = ({
               </div>
             )}
 
-            {/* Single Cost Table (New) */}
             {isSingle && !isConsumerMode && <PricingTable recipe={item} />}
 
-            {/* Consumer Mode Single Price Display */}
             {isSingle && isConsumerMode && (
               <div className="grid grid-cols-3 gap-2 w-full text-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800/50">
                 {item.priceShot && (
@@ -4079,7 +4203,6 @@ const ViewerOverlay = ({
               </div>
             )}
 
-            {/* Ingredients */}
             {!isSingle && !isFood && (
               <div>
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -4122,7 +4245,6 @@ const ViewerOverlay = ({
               </div>
             )}
 
-            {/* Steps */}
             {!isFood && (
               <div>
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -4139,7 +4261,6 @@ const ViewerOverlay = ({
               </div>
             )}
 
-            {/* Flavor & Tags */}
             <div className="space-y-4">
               {item.flavorDescription && (
                 <div className="bg-gradient-to-br from-amber-900/10 to-transparent p-4 rounded-xl border border-amber-500/10 relative">
@@ -4167,7 +4288,6 @@ const ViewerOverlay = ({
           </div>
         </div>
 
-        {/* Footer Actions - Fixed at bottom */}
         <div className="p-4 border-t border-slate-800 bg-slate-950 pb-safe z-20 flex gap-3 shrink-0">
           <button
             onClick={() =>
@@ -4212,14 +4332,13 @@ const ViewerOverlay = ({
 
 const LoginScreen = ({ onLogin }) => {
   const [shopId, setShopId] = useState('');
-  const [role, setRole] = useState(null); // 'owner' | 'staff' | 'customer'
+  const [role, setRole] = useState(null);
   const [password, setPassword] = useState('');
   const [staffList, setStaffList] = useState([]);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [error, setError] = useState('');
 
-  // 抓取員工名單
   useEffect(() => {
     if (role === 'staff' && shopId.length >= 3 && window.firebase) {
       const fetchStaff = async () => {
@@ -4257,11 +4376,9 @@ const LoginScreen = ({ onLogin }) => {
         ? window.firebase.firestore()
         : null;
 
-    // --- 店長登入 ---
     if (role === 'owner') {
       const localPwd = localStorage.getItem('bar_admin_password');
       if (localPwd && password === localPwd) {
-        // Pass
       } else if (db) {
         try {
           const settingsDoc = await db
@@ -4297,7 +4414,6 @@ const LoginScreen = ({ onLogin }) => {
       }
     }
 
-    // --- 員工登入 ---
     let finalRole = role;
     if (role === 'staff') {
       if (staffList.length > 0) {
@@ -4306,7 +4422,6 @@ const LoginScreen = ({ onLogin }) => {
         if (staff && staff.password !== password)
           return setError('員工密碼錯誤');
 
-        // 系統內部判斷權限，介面不顯示
         if (staff && staff.role === 'manager') {
           finalRole = 'manager';
         }
@@ -4325,7 +4440,7 @@ const LoginScreen = ({ onLogin }) => {
         Bar Manager
       </h1>
       <p className="text-slate-400 text-sm mb-8">
-        雲端調酒管理系統 v13.2 (Pro)
+        雲端調酒管理系統 v14.2 (Pro)
       </p>
 
       <div className="w-full max-w-sm space-y-4">
@@ -4417,7 +4532,6 @@ const LoginScreen = ({ onLogin }) => {
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-blue-500 appearance-none"
                   >
                     <option value="">-- 請選擇 --</option>
-                    {/* 這裡只顯示名字 */}
                     {staffList.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
@@ -4461,19 +4575,17 @@ function MainAppContent() {
   const [activeTab, setActiveTab] = useState('recipes');
   const [firebaseReady, setFirebaseReady] = useState(false);
 
-  // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [shopId, setShopId] = useState('');
   const [userRole, setUserRole] = useState('customer');
 
   const [ingredients, setIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
-  const [foodItems, setFoodItems] = useState([]); // 新增餐點狀態
+  const [foodItems, setFoodItems] = useState([]);
   const [sections, setSections] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  // Settings
   const [adminPassword, setAdminPassword] = useState(
     () => localStorage.getItem('bar_admin_password') || ''
   );
@@ -4482,21 +4594,17 @@ function MainAppContent() {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [isSettingPassword, setIsSettingPassword] = useState(false);
 
-  // Staff Management
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffPwd, setNewStaffPwd] = useState('');
   const [isNewStaffManager, setIsNewStaffManager] = useState(false);
 
-  // Editor State
   const [editorMode, setEditorMode] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [viewingItem, setViewingItem] = useState(null);
 
-  // Filter & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all');
 
-  // Global Lists
   const [availableTags, setAvailableTags] = useState([
     '酸甜 Sour/Sweet',
     '草本 Herbal',
@@ -4521,23 +4629,20 @@ function MainAppContent() {
     'Shot',
   ]);
 
-  // --- 修正：從 localStorage 讀取基酒，如果沒有就用預設值 ---
   const [availableBases, setAvailableBases] = useState(() => {
     try {
       const saved = localStorage.getItem('bar_custom_bases_v1');
-      return saved ? JSON.parse(saved) : DEFAULT_BASE_SPIRITS;
+      let list = saved ? JSON.parse(saved) : DEFAULT_BASE_SPIRITS;
+      return list.filter((b) => !b.includes('Soft') && !b.includes('軟飲'));
     } catch (e) {
       return DEFAULT_BASE_SPIRITS;
     }
   });
 
-  // 監聽 availableBases 變動並儲存
   useEffect(() => {
     localStorage.setItem('bar_custom_bases_v1', JSON.stringify(availableBases));
   }, [availableBases]);
-  // -----------------------------------------------------
 
-  // --- 新增：餐點分類 (從 localStorage 讀取) ---
   const [foodCategories, setFoodCategories] = useState(() => {
     try {
       const saved = localStorage.getItem('bar_food_categories_v1');
@@ -4562,7 +4667,6 @@ function MainAppContent() {
       JSON.stringify(foodCategories)
     );
   }, [foodCategories]);
-  // -----------------------------------------------------
 
   const [ingCategories, setIngCategories] = useState([
     { id: 'alcohol', label: '基酒 Alcohol' },
@@ -4625,7 +4729,6 @@ function MainAppContent() {
           setRecipes(list);
           localStorage.setItem('bar_recipes_v3', JSON.stringify(list));
         });
-      // 新增餐點監聽
       const unsubFood = db
         .collection('shops')
         .doc(shopId)
@@ -4730,7 +4833,6 @@ function MainAppContent() {
     showAlert('成功', '管理員密碼已更新');
   };
 
-  // --- Staff Management Logic ---
   const handleAddStaff = async () => {
     if (!newStaffName.trim() || !newStaffPwd.trim())
       return showAlert('錯誤', '請輸入名字與密碼');
@@ -4771,7 +4873,6 @@ function MainAppContent() {
     }
   };
 
-  // --- Data Management Logic ---
   const handleExportJSON = () => {
     const data = {
       ingredients,
@@ -4779,7 +4880,7 @@ function MainAppContent() {
       foodItems,
       sections,
       staffList,
-      version: '13.3',
+      version: '14.2',
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: 'application/json',
@@ -5037,7 +5138,6 @@ function MainAppContent() {
     showConfirm('刪除確認', '確定要刪除嗎？', async () => {
       if (window.firebase) {
         const db = window.firebase.firestore();
-        // 修改刪除邏輯以支援餐點
         const collectionName =
           type === 'recipe'
             ? 'recipes'
@@ -5051,12 +5151,13 @@ function MainAppContent() {
           .doc(id)
           .delete();
       }
+      setEditorMode(null);
+      setViewingItem(null);
     });
   };
 
   const saveItem = async (item, mode) => {
     const db = window.firebase.firestore();
-    // 修改儲存邏輯以支援餐點
     const col =
       mode === 'recipe' ? 'recipes' : mode === 'food' ? 'foods' : 'ingredients';
     if (item.image && item.image.startsWith('data:')) {
@@ -5072,13 +5173,11 @@ function MainAppContent() {
     setEditorMode(null);
   };
 
-  // --- 修正：startEdit 初始化 ---
   const startEdit = (mode, item) => {
     setEditorMode(mode);
     if (item) {
       setEditingItem(item);
     } else {
-      // 初始化新物件
       const newItem = { id: generateId(), nameZh: '' };
       if (mode === 'recipe') {
         Object.assign(newItem, {
@@ -5087,7 +5186,6 @@ function MainAppContent() {
           targetCostRate: '',
         });
       } else if (mode === 'food') {
-        // 餐點初始化
         Object.assign(newItem, {
           type: 'food',
           price: '',
@@ -5096,8 +5194,6 @@ function MainAppContent() {
           category: '',
         });
       } else {
-        // 材料庫預設為 'alcohol' (或 'other')，這樣下拉選單的 type 才會正確，
-        // 選單正確後，基酒的子選單才會顯示出來。
         Object.assign(newItem, {
           type: 'alcohol',
           price: 0,
@@ -5108,20 +5204,15 @@ function MainAppContent() {
       setEditingItem(newItem);
     }
   };
-  // ---------------------------------
 
   if (!isLoggedIn) return <LoginScreen onLogin={handleLogin} />;
 
-  // 權限判斷
   const isOwner = userRole === 'owner';
   const isManager = userRole === 'manager';
   const isStaff = userRole === 'staff';
 
-  // 編輯：店長、經理
   const canEdit = isOwner || isManager;
-  // 材料庫：店長、經理、員工(唯讀)
   const showInventory = canEdit || isStaff;
-  // 速算：店長、經理、員工
   const showQuickCalc = canEdit || isStaff;
 
   return (
@@ -5144,10 +5235,11 @@ function MainAppContent() {
             userRole={canEdit ? 'owner' : 'customer'}
             isConsumerMode={!canEdit}
             onUnlock={handleUnlockRequest}
+            // 這是修復的核心：傳遞分類對應表
+            ingCategories={ingCategories}
           />
         )}
 
-        {/* 新增餐點頁面 */}
         {activeTab === 'food' && (
           <FoodListScreen
             foodItems={foodItems}
@@ -5176,7 +5268,6 @@ function MainAppContent() {
           />
         )}
 
-        {/* 傳入 isReadOnly 控制員工權限 */}
         {activeTab === 'ingredients' && showInventory && (
           <InventoryScreen
             ingredients={ingredients}
@@ -5191,7 +5282,6 @@ function MainAppContent() {
           />
         )}
 
-        {/* 開放速算給員工 */}
         {activeTab === 'quick' && showQuickCalc && (
           <QuickCalcScreen
             ingredients={ingredients}
@@ -5245,7 +5335,6 @@ function MainAppContent() {
               </div>
             )}
 
-            {/* STAFF MANAGEMENT (Owner Only) */}
             {isOwner && (
               <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800 animate-slide-up">
                 <h3 className="text-sm font-bold text-white flex gap-2 items-center">
@@ -5320,7 +5409,6 @@ function MainAppContent() {
               </div>
             )}
 
-            {/* DATA MANAGEMENT (Owner Only) */}
             {isOwner && (
               <div className="bg-slate-900 p-4 rounded-xl space-y-4 border border-slate-800">
                 <h3 className="text-sm font-bold text-white flex gap-2 items-center">
