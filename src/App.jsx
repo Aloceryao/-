@@ -660,7 +660,7 @@ const RecipeCard = memo(({ recipe, ingredients, onClick, role }) => {
     [recipe, ingredients]
   );
   const isSingle = recipe.type === 'single' || recipe.isIngredient;
-  const isFood = recipe.type === 'food';
+  const isFood = recipe.type === 'food'; 
   const isOwnerOrManager = role === 'owner' || role === 'manager';
 
   const displayPrice = isSingle
@@ -837,8 +837,8 @@ const CategoryEditModal = ({
         const rawId = val.replace('TYPE_', '');
         const found = ingCategories.find((c) => c.id === rawId);
         if (found) {
-          setNameZh(found.label);
-          setNameEn(found.label);
+          setNameZh(found.label); 
+          setNameEn(found.label); 
         }
       } else {
         const parts = val.split(' ');
@@ -1298,10 +1298,11 @@ const FoodListScreen = ({
           )}
         </div>
 
+        {/* 這裡已經將按鈕放大 (text-sm, px-4 py-2) */}
         <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 no-scrollbar w-full">
           <button
             onClick={() => setActiveCat('all')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all select-none ${
+            className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all select-none ${
               activeCat === 'all'
                 ? 'bg-amber-600 text-white shadow'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -1313,7 +1314,7 @@ const FoodListScreen = ({
             <div key={cat.id} className="relative group">
               <button
                 onClick={() => setActiveCat(cat.label)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all pr-4 select-none ${
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all pr-5 select-none ${
                   activeCat === cat.label
                     ? 'bg-slate-700 text-white border border-amber-500/50 shadow'
                     : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -1339,7 +1340,7 @@ const FoodListScreen = ({
               <div className="flex items-center bg-slate-800 rounded-full px-2 py-1 border border-slate-600 animate-fade-in">
                 <input
                   autoFocus
-                  className="bg-transparent text-xs text-white w-16 outline-none"
+                  className="bg-transparent text-sm text-white w-20 outline-none"
                   placeholder="分類名稱"
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
@@ -1352,15 +1353,15 @@ const FoodListScreen = ({
                   onClick={handleAddCategory}
                   className="text-amber-500 ml-1"
                 >
-                  <Check size={14} />
+                  <Check size={16} />
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setIsAddingCat(true)}
-                className="p-1.5 bg-slate-800 rounded-full text-slate-500 hover:text-white hover:bg-slate-700"
+                className="p-2 bg-slate-800 rounded-full text-slate-500 hover:text-white hover:bg-slate-700"
               >
-                <Plus size={14} />
+                <Plus size={16} />
               </button>
             ))}
         </div>
@@ -1387,9 +1388,8 @@ const FoodListScreen = ({
     </div>
   );
 };
-
 // ==========================================
-// 4. Screens (核心頁面 - 修復: 接收 ingCategories)
+// 4. Screens (Part 2)
 // ==========================================
 
 const RecipeListScreen = ({
@@ -1405,7 +1405,7 @@ const RecipeListScreen = ({
   availableBases,
   userRole,
   onUnlock,
-  ingCategories, // 關鍵修復：從上層接收分類表
+  ingCategories,
 }) => {
   const [filterBases, setFilterBases] = useState([]);
   const [filterTags, setFilterTags] = useState([]);
@@ -1542,13 +1542,12 @@ const RecipeListScreen = ({
     const safeIngs = Array.isArray(ingredients) ? ingredients : [];
     const safeRecipes = Array.isArray(recipes) ? recipes : [];
 
-    // 關鍵修正：保留自訂分類的 type，確保 Filter 邏輯能正確運作
     const singleIngredients = safeIngs
       .filter((i) => i.addToSingle)
       .map((i) => ({
         ...i,
-        category: 'single',
-        type: i.type, // 重要：不要強制覆蓋為 'single'，保留原始分類 ID (如 wine)
+        category: 'single', 
+        type: i.type, 
         baseSpirit: i.subType || '',
         priceShot: i.priceShot || '',
         priceGlass: i.priceGlass || '',
@@ -1563,13 +1562,11 @@ const RecipeListScreen = ({
     }
 
     return sourceList.filter((r) => {
-      // 修正：因為上面保留了原始 type，這裡的判斷要放寬
       const matchCat =
         recipeCategoryFilter === 'all' ||
         r.type === recipeCategoryFilter ||
-        (recipeCategoryFilter === 'single' &&
-          (r.type === 'soft' || r.isIngredient || r.type === 'single'));
-
+        (recipeCategoryFilter === 'single' && (r.type === 'soft' || r.isIngredient || r.type === 'single')); 
+        
       const matchSearch =
         safeString(r.nameZh).includes(searchTerm) ||
         safeString(r.nameEn).toLowerCase().includes(searchTerm.toLowerCase());
@@ -1595,10 +1592,11 @@ const RecipeListScreen = ({
         if (target) {
           if (target === 'TYPE_SOFT') {
             matchGrid = r.type === 'soft';
-          } else if (target.startsWith('TYPE_')) {
+          }
+          else if (target.startsWith('TYPE_')) {
             const rawType = target.replace('TYPE_', '');
             if (r.isIngredient) {
-              matchGrid = r.type === rawType; // 這裡將會正確匹配 (如 type === wine)
+              matchGrid = r.type === rawType;
             } else {
               matchGrid = false;
             }
@@ -1779,17 +1777,17 @@ const RecipeListScreen = ({
           </div>
         )}
       </div>
-      {/* 修正：正確傳遞 ingCategories 屬性 */}
       <CategoryEditModal
         isOpen={showCatModal}
         onClose={() => setShowCatModal(false)}
         onSave={handleAddCategory}
         availableBases={availableBases}
-        ingCategories={ingCategories}
+        ingCategories={ingCategories} 
       />
     </div>
   );
 };
+
 const FeaturedSectionScreen = ({
   sections,
   setSections,
@@ -2401,10 +2399,11 @@ const InventoryScreen = ({
           )}
         </div>
 
+        {/* 修正：字體放大 (text-sm) 且內距增加 (px-4 py-2) */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar w-full">
           <button
             onClick={() => setCategoryFilter('all')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all select-none ${
+            className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all select-none ${
               categoryFilter === 'all'
                 ? 'bg-amber-600 text-white shadow'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -2416,7 +2415,7 @@ const InventoryScreen = ({
             <div key={cat.id} className="relative group">
               <button
                 onClick={() => setCategoryFilter(cat.id)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all pr-4 select-none ${
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold transition-all pr-5 select-none ${
                   categoryFilter === cat.id
                     ? 'bg-slate-700 text-white border border-amber-500/50 shadow'
                     : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -2443,7 +2442,7 @@ const InventoryScreen = ({
               <div className="flex items-center bg-slate-800 rounded-full px-2 py-1 border border-slate-600 animate-fade-in">
                 <input
                   autoFocus
-                  className="bg-transparent text-xs text-white w-16 outline-none"
+                  className="bg-transparent text-sm text-white w-20 outline-none"
                   placeholder="分類名稱"
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
@@ -2456,18 +2455,20 @@ const InventoryScreen = ({
                   onClick={handleAddCategory}
                   className="text-amber-500 ml-1"
                 >
-                  <Check size={14} />
+                  <Check size={16} />
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setIsAddingCat(true)}
-                className="p-1.5 bg-slate-800 rounded-full text-slate-500 hover:text-white hover:bg-slate-700"
+                className="p-2 bg-slate-800 rounded-full text-slate-500 hover:text-white hover:bg-slate-700"
               >
-                <Plus size={14} />
+                <Plus size={16} />
               </button>
             ))}
         </div>
+        
+        {/* 修正：子分類字體也稍微放大 (text-xs) */}
         {categoryFilter === 'alcohol' && (
           <div className="flex items-center gap-2 overflow-x-auto pb-2 mt-2 no-scrollbar w-full animate-slide-up">
             <span className="text-[10px] text-slate-500 font-bold shrink-0 uppercase tracking-wider pl-1">
@@ -2475,7 +2476,7 @@ const InventoryScreen = ({
             </span>
             <button
               onClick={() => setSubCategoryFilter('all')}
-              className={`whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
+              className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
                 subCategoryFilter === 'all'
                   ? 'bg-slate-700 border-slate-600 text-white'
                   : 'border-transparent text-slate-500'
@@ -2487,7 +2488,7 @@ const InventoryScreen = ({
               <button
                 key={spirit}
                 onClick={() => setSubCategoryFilter(spirit)}
-                className={`whitespace-nowrap px-2 py-1 rounded text-[10px] font-medium transition-colors border ${
+                className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
                   subCategoryFilter === spirit
                     ? 'bg-slate-700 border-slate-600 text-white'
                     : 'border-transparent text-slate-500'
@@ -4332,7 +4333,7 @@ const ViewerOverlay = ({
 
 const LoginScreen = ({ onLogin }) => {
   const [shopId, setShopId] = useState('');
-  const [role, setRole] = useState(null);
+  const [role, setRole] = useState(null); 
   const [password, setPassword] = useState('');
   const [staffList, setStaffList] = useState([]);
   const [selectedStaffId, setSelectedStaffId] = useState('');
@@ -4581,7 +4582,7 @@ function MainAppContent() {
 
   const [ingredients, setIngredients] = useState([]);
   const [recipes, setRecipes] = useState([]);
-  const [foodItems, setFoodItems] = useState([]);
+  const [foodItems, setFoodItems] = useState([]); 
   const [sections, setSections] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -5135,6 +5136,24 @@ function MainAppContent() {
 
   const requestDelete = async (id, type) => {
     if (userRole !== 'owner' && userRole !== 'manager') return;
+
+    // --- 關鍵修改：刪除保護機制 (Deletion Protection) ---
+    if (type === 'ingredient') {
+      const usedInRecipes = recipes.filter(r => 
+        r.ingredients && r.ingredients.some(ing => ing.id === id)
+      );
+
+      if (usedInRecipes.length > 0) {
+        const recipeNames = usedInRecipes.map(r => r.nameZh).join(', ');
+        showAlert(
+          '無法刪除', 
+          `此材料正在被以下酒譜使用中：\n${recipeNames}\n\n請先從酒譜中移除此材料。`
+        );
+        return; 
+      }
+    }
+    // ----------------------------------------------------
+
     showConfirm('刪除確認', '確定要刪除嗎？', async () => {
       if (window.firebase) {
         const db = window.firebase.firestore();
@@ -5235,7 +5254,6 @@ function MainAppContent() {
             userRole={canEdit ? 'owner' : 'customer'}
             isConsumerMode={!canEdit}
             onUnlock={handleUnlockRequest}
-            // 這是修復的核心：傳遞分類對應表
             ingCategories={ingCategories}
           />
         )}
